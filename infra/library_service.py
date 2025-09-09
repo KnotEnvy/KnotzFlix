@@ -152,7 +152,9 @@ def scan_and_index(
                 # add image row if not present
                 imgs = db.get_images_for_movie(int(movie_id), kind="poster")
                 if not any(Path(img.path) == out_path for img in imgs):
-                    db.add_image(Image(id=None, movie_id=int(movie_id), kind="poster", path=str(out_path)))
+                    # src hints at creation method
+                    src = "ffmpeg" if out_path.exists() else "placeholder"
+                    db.add_image(Image(id=None, movie_id=int(movie_id), kind="poster", path=str(out_path), src=src))
             except Exception:
                 pass
 

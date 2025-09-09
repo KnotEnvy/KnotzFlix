@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from .cache import content_addressed_path
+import hashlib
 
 
 # Minimal valid 1x1 JPEG bytes (JFIF), for placeholder generation without PIL.
@@ -44,6 +45,27 @@ def pick_timestamp(duration_sec: Optional[float]) -> float:
         return 15.0
     ts = duration_sec * 0.2
     # clamp between 10s and duration-5s
+    ts = max(10.0, min(ts, max(duration_sec - 5.0, 0.0)))
+    return ts
+
+
+def choose_timestamp_deterministic(file_fingerprint: str, duration_sec: Optional[float]) -> float:
+    """Choose a poster timestamp deterministically based on file fingerprint.
+
+    Uses a baseline of 20% into the video, with a tiny deterministic offset
+    derived from the fingerprint to avoid always picking the exact same frame
+    across many files of similar length. Clamped safely within [10s, duration-5s].
+    """
+    base = pick_timestamp(duration_sec)
+    if not duration_sec or duration_sec <= 0:
+        return base
+    # Derive a stable pseudo-random offset in seconds within [-3s, +3s]
+    h = hashlib.blake2b(file_fingerprint.encode("utf-8"), digest_size=4).digest()
+    n = int.from_bytes(h, "big")
+    # map to [-1.0, +1.0]
+    unit = (n / 0xFFFFFFFF) * 2.0 - 1.0
+    offset = unit * 3.0
+    ts = base + offset
     ts = max(10.0, min(ts, max(duration_sec - 5.0, 0.0)))
     return ts
 
@@ -93,17 +115,18 @@ def generate_poster(
     spec: PosterSpec = PosterSpec(),
     *,
     dry_run: bool = False,
+    force: bool = False,
 ) -> tuple[Path, Optional[list[str]]]:
     out = content_addressed_path("poster", file_fingerprint, f"h{spec.height}", "jpg")
-    if out.exists():
+    if out.exists() and not force:
         return out, None
 
     # Prefer heuristic via ffmpeg 'thumbnail' filter; fallback to timestamp if it fails
     thumb_cmd = build_ffmpeg_cmd_thumbnail(media_path, out, spec.height, spec.jpeg_quality)
-    ts = pick_timestamp(duration_sec)
+    ts = choose_timestamp_deterministic(file_fingerprint, duration_sec)
     ts_cmd = build_ffmpeg_cmd(media_path, out, ts, spec.height, spec.jpeg_quality)
     if dry_run:
-        # For tests, expose the timestamp-based command shape
+        # For tests, expose the timestamp-based command shape (deterministic ts)
         return out, ts_cmd
 
     if shutil.which("ffmpeg"):

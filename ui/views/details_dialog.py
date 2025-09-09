@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from infra.db import Database
+from domain.models import Image
 from infra import playback
 
 
@@ -59,19 +60,35 @@ class DetailsDialog(QDialog):
         if m and m.runtime_sec:
             badges.append(f"{m.runtime_sec//60} min")
 
+        # Add poster metadata badge (dimensions) if available
+        try:
+            if poster_path and Path(poster_path).exists():
+                pix_info = QPixmap(poster_path)
+                if not pix_info.isNull():
+                    badges.append(f"poster {pix_info.width()}x{pix_info.height()}")
+        except Exception:
+            pass
+
+        # Source badge
+        imgs = db.get_images_for_movie(movie_id, kind="poster")
+        if imgs and imgs[0].src:
+            badges.append(imgs[0].src)
+
         badges_lbl = QLabel(" ".join(f"<span style='background:#eee;padding:2px 6px;border-radius:4px'>{b}</span>" for b in badges))
 
         # Buttons
         play_btn = QPushButton("Play")
         open_btn = QPushButton("Open Folder")
+        regen_btn = QPushButton("Regenerate Poster")
 
         play_btn.clicked.connect(self._play)
         open_btn.clicked.connect(self._open)
+        regen_btn.clicked.connect(self._regen)
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(self.reject)
 
-        left = QVBoxLayout(); left.addWidget(title_lbl); left.addWidget(badges_lbl); left.addStretch(1); left.addWidget(play_btn); left.addWidget(open_btn)
+        left = QVBoxLayout(); left.addWidget(title_lbl); left.addWidget(badges_lbl); left.addStretch(1); left.addWidget(play_btn); left.addWidget(open_btn); left.addWidget(regen_btn)
         top = QHBoxLayout(); top.addWidget(poster); top.addLayout(left)
 
         lay = QVBoxLayout(); lay.addLayout(top); lay.addStretch(1); lay.addWidget(bb)
@@ -93,3 +110,27 @@ class DetailsDialog(QDialog):
         if p:
             playback.open_containing_folder(p)
 
+    def _regen(self) -> None:
+        files = self.db.get_media_files_for_movie(self.movie_id)
+        if not files:
+            return
+        f = files[0]
+        # Attempt to regenerate poster (force rebuild)
+        try:
+            from infra import thumbnails
+            out_path, _ = thumbnails.generate_poster(Path(f.path), file_fingerprint=f.fingerprint or "", duration_sec=None, dry_run=False, force=True)
+            # Persist/replace image row
+            imgs = self.db.get_images_for_movie(self.movie_id, kind="poster")
+            if imgs:
+                img = imgs[0]
+                img.path = str(out_path)
+                img.src = "ffmpeg" if out_path.exists() else "placeholder"
+                self.db.add_image(img)
+            else:
+                self.db.add_image(Image(id=None, movie_id=self.movie_id, kind="poster", path=str(out_path), src="ffmpeg"))
+            # Refresh poster preview
+            pix = QPixmap(str(out_path))
+            if not pix.isNull():
+                self.findChildren(QLabel)[0].setPixmap(pix.scaled(QSize(240, 360), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
+        except Exception:
+            pass

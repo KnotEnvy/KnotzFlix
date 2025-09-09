@@ -109,6 +109,38 @@ class PosterTileDelegate(QStyledItemDelegate):
         elided = fm.elidedText(label, Qt.TextElideMode.ElideRight, text_rect.width())
         painter.drawText(text_rect, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom, elided)
 
+        # Progress badge (continue watching)
+        try:
+            progress = int(index.data(Roles.ProgressRole) or 0)
+        except Exception:
+            progress = 0
+        if 0 < progress < 100:
+            bar_w = max(40, poster_rect.width() // 3)
+            bar_h = 8
+            bx = poster_rect.right() - bar_w - 8
+            by = poster_rect.top() + 8
+            bgc = QColor(0, 0, 0, 140)
+            fgc = QColor(66, 133, 244)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(bgc))
+            painter.drawRoundedRect(QRect(bx, by, bar_w, bar_h), 4, 4)
+            fill_w = int(bar_w * (progress / 100.0))
+            if fill_w > 0:
+                painter.setBrush(QBrush(fgc))
+                painter.drawRoundedRect(QRect(bx, by, fill_w, bar_h), 4, 4)
+            # percent text
+            painter.setPen(QColor(255, 255, 255))
+            from PyQt6.QtGui import QFont
+            f = painter.font()
+            f.setPointSizeF(max(7.0, f.pointSizeF() - 1))
+            painter.setFont(f)
+            t = f"{progress}%"
+            fm2 = QFontMetrics(f)
+            tw2 = fm2.horizontalAdvance(t)
+            tx2 = bx + (bar_w - tw2) // 2
+            ty2 = by + bar_h - 1
+            painter.drawText(QRect(bx, by - 6, bar_w, bar_h + 12), Qt.AlignmentFlag.AlignCenter, t)
+
         # Selection or focus ring
         has_focus = bool(option.state & QStyle.StateFlag.State_HasFocus) or self.parent_view.currentIndex() == index
         is_sel = bool(option.state & QStyle.StateFlag.State_Selected)
@@ -128,12 +160,44 @@ class PosterTileDelegate(QStyledItemDelegate):
         painter.restore()
 
 
+class PosterListView(QListView):
+    def keyPressEvent(self, event):  # type: ignore[override]
+        key = event.key()
+        if key in (Qt.Key.Key_Home, Qt.Key.Key_End, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown):
+            m = self.model()
+            if not m:
+                return super().keyPressEvent(event)
+            count = m.rowCount()
+            if count == 0:
+                return super().keyPressEvent(event)
+            gs = self.gridSize()
+            spacing = self.spacing()
+            cols = max(1, (self.viewport().width() + spacing) // (max(1, gs.width()) + spacing))
+            rows = max(1, (self.viewport().height() + spacing) // (max(1, gs.height()) + spacing))
+            cur = self.currentIndex().row()
+            if key == Qt.Key.Key_Home:
+                self.setCurrentIndex(m.index(0, 0))
+                return
+            if key == Qt.Key.Key_End:
+                self.setCurrentIndex(m.index(count - 1, 0))
+                return
+            if key == Qt.Key.Key_PageDown:
+                nxt = min(count - 1, cur + cols * rows)
+                self.setCurrentIndex(m.index(nxt, 0))
+                return
+            if key == Qt.Key.Key_PageUp:
+                prv = max(0, cur - cols * rows)
+                self.setCurrentIndex(m.index(prv, 0))
+                return
+        return super().keyPressEvent(event)
+
+
 class PosterGrid(QWidget):
-    def __init__(self, db: Database, *, order_mode: str = "default", path_prefix: str | None = None):
+    def __init__(self, db: Database, *, order_mode: str = "default", path_prefix: str | None = None, id_allowlist: list[int] | None = None):
         super().__init__()
         self.db = db
-        self.model = MovieListModel(db, order_mode=order_mode, path_prefix=path_prefix)
-        self.view = QListView()
+        self.model = MovieListModel(db, order_mode=order_mode, path_prefix=path_prefix, id_allowlist=id_allowlist)
+        self.view = PosterListView()
         self.view.setModel(self.model)
         self.view.setViewMode(QListView.ViewMode.IconMode)
         self.view.setResizeMode(QListView.ResizeMode.Adjust)
@@ -185,6 +249,9 @@ class PosterGrid(QWidget):
         from PyQt6.QtGui import QShortcut, QKeySequence
         QShortcut(QKeySequence("P"), self.view, activated=self._play)
         QShortcut(QKeySequence("R"), self.view, activated=self._open_containing)
+        # Mark watched/unwatched
+        QShortcut(QKeySequence("W"), self.view, activated=lambda: self._set_watched(True))
+        QShortcut(QKeySequence("U"), self.view, activated=lambda: self._set_watched(False))
 
     def refresh(self) -> None:
         self.model.refresh()
@@ -251,6 +318,10 @@ class PosterGrid(QWidget):
         open_act = menu.addAction("Open Containing Folder")
         det_act = menu.addAction("Details…")
         loc_act = menu.addAction("Locate Missing…")
+        menu.addSeparator()
+        mark_w = menu.addAction("Mark as Watched")
+        mark_uw = menu.addAction("Mark as Unwatched")
+        reset_prog = menu.addAction("Reset Progress")
         act = menu.exec(self.view.viewport().mapToGlobal(pos))
         if act == play_act:
             self._play()
@@ -260,6 +331,12 @@ class PosterGrid(QWidget):
             self._show_details()
         elif act == loc_act:
             self._locate_missing()
+        elif act == mark_w:
+            self._set_watched(True)
+        elif act == mark_uw:
+            self._set_watched(False)
+        elif act == reset_prog:
+            self._reset_progress()
 
     def _play(self) -> None:
         p = self._primary_file_path()
@@ -283,6 +360,24 @@ class PosterGrid(QWidget):
             return
         dlg = DetailsDialog(self.db, int(mid), self)
         dlg.exec()
+
+    def _set_watched(self, watched: bool) -> None:
+        mid = self._current_movie_id()
+        if mid is None:
+            return
+        try:
+            self.db.set_watched(int(mid), watched)
+        except Exception:
+            pass
+
+    def _reset_progress(self) -> None:
+        mid = self._current_movie_id()
+        if mid is None:
+            return
+        try:
+            self.db.reset_progress(int(mid))
+        except Exception:
+            pass
 
     def _locate_missing(self) -> None:
         # If the primary file path is missing, allow the user to relink

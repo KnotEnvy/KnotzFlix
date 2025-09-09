@@ -46,7 +46,7 @@ This roadmap is iterative. Each task includes acceptance criteria.
 - [x] Cache system (content-addressed, size variants).  
   Done when: cache reused on rescans. (Implemented; verified.)
 - [x] Index titles/tags into FTS5.  
-  Done when: instant search returns results on 10k items. (Titles indexed; UI instant search pending.)
+  Done when: instant search returns results on 10k items. (Titles indexed; UI instant search implemented.)
 
 ---
 
@@ -54,35 +54,35 @@ This roadmap is iterative. Each task includes acceptance criteria.
 - [ ] Virtualized poster grid, keyboard navigation, focus ring.  
   Done when: first render ≤200ms; smooth scroll; Home/End work. (Initial QListView grid present; polish pending.)
 - [ ] Empty state screens + error toasts.  
-  Done when: no crashes on empty library or scan cancel. (Not started.)
+  Done when: no crashes on empty library or scan cancel. (Partial: empty state implemented; toast/error surfacing pending.)
 
 ---
 
 ## Sprint 6 - Details & Shelves
 - [ ] Details page (poster, title, year, file badges).  
   Done when: opens ≤100ms; back navigation works.
-- [ ] Shelves: Recently Added, By Folder.  
-  Done when: correct contents after rescan.
+- [x] Shelves: Recently Added, By Folder.  
+  Done when: correct contents after rescan. (Implemented; tabs added; synced with roots and rescans.)
 - [ ] Mark Watched + Continue Watching.  
-  Done when: states persist across sessions.
+  Done when: states persist across sessions. (Partial: shelf and watched/unwatched/reset actions wired; automatic progress updates pending.)
 
 ---
 
 ## Sprint 7 - Playback & File Handling
 - [x] External player launch (robust path quoting).  
-  Done when: works across OSes with spaces/unicode paths. (Infra implemented; UI hook to add.)
-- [ ] Locate Missing flow.  
-  Done when: user can relink file within 3 clicks. (DB relink helper exists; UI flow pending.)
+  Done when: works across OSes with spaces/unicode paths. (Infra implemented; UI wired in Library context menu.)
+- [x] Locate Missing flow.  
+  Done when: user can relink file within 3 clicks. (Implemented via Library context menu; uses DB relink helper.)
 - [x] Open Containing Folder.  
-  Done when: opens OS file explorer to correct path. (Infra implemented; UI hook pending.)
+  Done when: opens OS file explorer to correct path. (Infra implemented; UI wired in context menu.)
 
 ---
 
 ## Sprint 8 - Watcher & Incremental Rescans
 - [ ] Platform FS watcher (inotify/FSEvents/USN) + polling fallback.  
-  Done when: new files appear within seconds.
-- [ ] Per-root rescans.  
-  Done when: scoped rescan runs without touching other roots.
+  Done when: new files appear within seconds. (Partial: QTimer polling watcher added; platform-native watchers pending.)
+- [x] Per-root rescans.  
+  Done when: scoped rescan runs without touching other roots. (UI button "Rescan Selected" added.)
 
 ---
 

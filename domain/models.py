@@ -35,8 +35,11 @@ class MediaFile:
 class Image:
     id: Optional[int]
     movie_id: int
-    kind: str  # poster/thumbnail
+    kind: str  # poster/thumbnail/backdrop
     path: str
+    width: Optional[int] = None
+    height: Optional[int] = None
+    src: Optional[str] = None
 
 
 @dataclass

@@ -1,6 +1,47 @@
 # KnotzFLix – Agent Handoff Guide
 
-This file orients the next developer team to resume work exactly where we left off. It summarizes scope, current status, how to run, what’s next, and key decisions.
+This file orients the next developer team to resume work exactly where we left off. It summarizes scope, current status, how to run, what's next, and key decisions.
+
+---
+
+## Agent Update – 2025-09
+
+This section captures recent changes and conventions to align future agents.
+
+### Status Deltas
+- Single-instance focus IPC: Implemented. Second launch pings the running app over localhost and brings the window to front.
+- Instant search UI: Implemented in Library tab. Uses FTS5 when available with safe tokenization; falls back to LIKE.
+- Posters heuristic: Improved. Tries ffmpeg `thumbnail` filter first, then timestamp fallback; still falls back to placeholder if all else fails.
+- Details view: Implemented minimal dialog (poster, title/year, basic badges, Play/Open Folder).
+- Shelves: Added tabs for Recently Added and By Folder (filters by selected root).
+- Locate Missing flow: Context menu action to relink a missing file path.
+- Watchers: Added lightweight polling fallback (QTimer) for periodic rescans; platform-specific watchers remain TODO.
+
+### Key Implementation Notes
+- Threading/SQLite: Never share a `sqlite3.Connection` across threads. `ui.main_window.ScanWorker` opens a thread-local `Database` inside `run()`.
+- FTS5 queries: Use `Database.search_titles(query)` which tokenizes input and builds a `token*` prefix query. Do not pass raw user strings to FTS5.
+- Posters rendering: `PosterTileDelegate` draws a gradient using `QLinearGradient` with float coords. If a pixmap fails to load, a clear placeholder tile is rendered.
+- Thumbnails pipeline: `infra/thumbnails.generate_poster` prefers `thumbnail` filter; dry-run returns a timestamp-based command to keep tests deterministic.
+- Per-root rescans: Settings tab includes Remove Selected and Rescan Selected buttons. UI wires to the existing scan pipeline.
+
+### Developer Shortcuts & UX
+- Library grid shortcuts: `P` to Play, `R` to Reveal in file explorer. Double-click/Enter opens Details.
+- Search debounce: 120 ms via QTimer. Tune as needed to meet ≤100 ms budget on large libraries.
+
+### Tests & Validation
+- Run tests: `python scripts/run_unittests.py` (25 tests passing at time of update).
+- If you change thumbnails behavior, ensure `tests/test_thumbnails.py` expectations remain valid (dry-run returns a timestamp-based ffmpeg command containing `-ss` and `-vf`).
+
+### Open Items (PRD/Checklist)
+- Poster golden tests + deterministic seed for heuristic selection.
+- Grid keyboard polish (PgUp/PgDn/Home/End selection by viewport rows/cols).
+- Continue Watching shelf using `play_state` and progress badges.
+- Real FS watchers (inotify/FSEvents/USN) with the polling fallback retained as a safety net.
+- Packaging and first-run wizard.
+
+### Gotchas
+- JPEG warnings from Qt for some files are benign; ensure the delegate handles null pixmaps. Consider self-healing (swap to placeholder) if you see frequent decode failures.
+- Keep DB migrations idempotent and FTS5 guarded; environments may lack FTS5.
 
 ## Project Snapshot
 - Goal: Local‑first, offline Netflix‑style movie manager.

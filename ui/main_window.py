@@ -114,6 +114,10 @@ def create_main_window() -> "QMainWindow":
             # By Folder tab
             self.by_folder = ByFolderView(self.db, self.cfg.library_roots[:])
             self.tabs.addTab(self.by_folder, "By Folder")
+            # Continue Watching tab
+            from PyQt6.QtWidgets import QWidget
+            self.continue_grid = PosterGrid(self.db, order_mode="default", id_allowlist=self.db.get_continue_watching_ids())
+            self.tabs.addTab(self.continue_grid, "Continue Watching")
 
             # Settings tab
             self.roots_list = QListWidget()
@@ -220,6 +224,13 @@ def create_main_window() -> "QMainWindow":
                 self.recent.refresh()
                 # by_folder grid refreshes via same model
                 self.by_folder.grid.refresh()
+                # refresh continue watching allowlist
+                try:
+                    ids = self.db.get_continue_watching_ids()
+                    self.continue_grid.model.set_id_allowlist(ids)
+                    self.continue_grid.refresh()
+                except Exception:
+                    pass
             except Exception:
                 pass
 

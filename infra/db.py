@@ -10,7 +10,7 @@ from domain.models import Movie, MediaFile, Image, PlayState
 from .paths import get_db_path, ensure_app_dirs
 
 
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 class Database:
@@ -61,6 +61,10 @@ class Database:
                 self._apply_migration_2(cx)
                 version = 2
                 cx.execute("UPDATE schema_version SET version = 2")
+            if version < 3:
+                self._apply_migration_3(cx)
+                version = 3
+                cx.execute("UPDATE schema_version SET version = 3")
             # Future migrations: bump until CURRENT_SCHEMA_VERSION
 
     def _apply_migration_1(self, cx: sqlite3.Connection) -> None:
@@ -137,6 +141,39 @@ class Database:
             ALTER TABLE media_file ADD COLUMN audio_channels INTEGER;
             """
         )
+
+    def _apply_migration_3(self, cx: sqlite3.Connection) -> None:
+        # Extend image table with optional width/height and src, and add a UNIQUE(movie_id, kind) if not present
+        # Add columns only if missing (guards re-entrancy/partial migrations)
+        try:
+            cols = {row[1] for row in cx.execute("PRAGMA table_info(image)")}
+        except Exception:
+            cols = set()
+        if "width" not in cols:
+            try:
+                cx.execute("ALTER TABLE image ADD COLUMN width INTEGER")
+            except sqlite3.OperationalError:
+                pass
+        if "height" not in cols:
+            try:
+                cx.execute("ALTER TABLE image ADD COLUMN height INTEGER")
+            except sqlite3.OperationalError:
+                pass
+        if "src" not in cols:
+            try:
+                cx.execute("ALTER TABLE image ADD COLUMN src TEXT")
+            except sqlite3.OperationalError:
+                pass
+        # Deduplicate any existing rows so a unique index can be created safely.
+        # Keep the lowest id per (movie_id, kind), remove others.
+        try:
+            cx.execute(
+                "DELETE FROM image WHERE id NOT IN (SELECT MIN(id) FROM image GROUP BY movie_id, kind)"
+            )
+        except Exception:
+            pass
+        # Attempt to add a uniqueness constraint via an index (SQLite cannot easily add UNIQUE to existing table)
+        cx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_image_unique ON image(movie_id, kind)")
 
     # CRUD operations
     def add_movie(self, m: Movie) -> int:
@@ -334,25 +371,25 @@ class Database:
     def add_image(self, img: Image) -> int:
         with self.tx() as cx:
             cur = cx.execute(
-                "INSERT INTO image (movie_id, kind, path) VALUES (?, ?, ?)",
-                (img.movie_id, img.kind, img.path),
+                "INSERT OR REPLACE INTO image (id, movie_id, kind, path, width, height, src) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (img.id, img.movie_id, img.kind, img.path, img.width, img.height, img.src),
             )
             return int(cur.lastrowid)
 
     def get_images_for_movie(self, movie_id: int, kind: str | None = None) -> list[Image]:
         if kind is None:
             cur = self.conn.execute(
-                "SELECT id, movie_id, kind, path FROM image WHERE movie_id=?",
+                "SELECT id, movie_id, kind, path, width, height, src FROM image WHERE movie_id=?",
                 (movie_id,),
             )
         else:
             cur = self.conn.execute(
-                "SELECT id, movie_id, kind, path FROM image WHERE movie_id=? AND kind=?",
+                "SELECT id, movie_id, kind, path, width, height, src FROM image WHERE movie_id=? AND kind=?",
                 (movie_id, kind),
             )
         res: list[Image] = []
         for row in cur.fetchall():
-            res.append(Image(id=row["id"], movie_id=row["movie_id"], kind=row["kind"], path=row["path"]))
+            res.append(Image(id=row["id"], movie_id=row["movie_id"], kind=row["kind"], path=row["path"], width=row["width"], height=row["height"], src=row["src"]))
         return res
 
     def get_media_files_for_movie(self, movie_id: int) -> list[MediaFile]:
@@ -385,6 +422,31 @@ class Database:
         cur = self.conn.execute(
             "SELECT DISTINCT movie_id FROM media_file WHERE REPLACE(path, '\\', '/') LIKE ?",
             (p.rstrip("/") + "/%",),
+        )
+        return [int(r[0]) for r in cur.fetchall()]
+
+    # Play state helpers
+    def get_play_state(self, movie_id: int) -> Optional[PlayState]:
+        cur = self.conn.execute(
+            "SELECT position_sec, watched FROM play_state WHERE movie_id=?",
+            (movie_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return PlayState(movie_id=movie_id, position_sec=row[0], watched=bool(row[1]))
+
+    def set_watched(self, movie_id: int, watched: bool) -> None:
+        st = self.get_play_state(movie_id)
+        pos = st.position_sec if st else 0
+        self.set_play_state(PlayState(movie_id=movie_id, position_sec=pos, watched=watched))
+
+    def reset_progress(self, movie_id: int) -> None:
+        self.set_play_state(PlayState(movie_id=movie_id, position_sec=0, watched=False))
+
+    def get_continue_watching_ids(self) -> list[int]:
+        cur = self.conn.execute(
+            "SELECT movie_id FROM play_state WHERE watched=0 AND position_sec>0 ORDER BY position_sec DESC"
         )
         return [int(r[0]) for r in cur.fetchall()]
 
