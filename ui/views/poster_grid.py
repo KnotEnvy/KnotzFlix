@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSize, QRect, QPoint
+from PyQt6.QtCore import Qt, QSize, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFontMetrics, QPixmap
 from PyQt6.QtWidgets import QListView, QWidget, QVBoxLayout, QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit, QMenu, QMessageBox, QFileDialog
 
 from infra.db import Database
+from domain.models import PlayState
 from ui.models.movie_list_model import MovieListModel, Roles
 from ui.views.details_dialog import DetailsDialog
 from infra import playback
+from ui.widgets.toast import show_toast
 
 
 class PosterTileDelegate(QStyledItemDelegate):
@@ -44,13 +46,14 @@ class PosterTileDelegate(QStyledItemDelegate):
 
         # Poster image (with fallback to placeholder when loading fails)
         path = index.data(Roles.PosterPathRole)
+        is_placeholder = bool(index.data(Roles.PosterIsPlaceholderRole))
         drew_image = False
-        if isinstance(path, str) and path:
+        if isinstance(path, str) and path and not is_placeholder:
             key = (path, poster_rect.width(), poster_rect.height())
             pix = self._scaled_cache.get(key)
             if pix is None:
                 src = QPixmap(path)
-                if not src.isNull():
+                if not src.isNull() and (src.width() > 2 and src.height() > 2):
                     # Scale preserving aspect ratio and center crop to fill tile
                     scaled = src.scaled(poster_rect.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
                     pix = scaled
@@ -193,6 +196,7 @@ class PosterListView(QListView):
 
 
 class PosterGrid(QWidget):
+    played = pyqtSignal(int)  # movie_id
     def __init__(self, db: Database, *, order_mode: str = "default", path_prefix: str | None = None, id_allowlist: list[int] | None = None):
         super().__init__()
         self.db = db
@@ -341,15 +345,24 @@ class PosterGrid(QWidget):
     def _play(self) -> None:
         p = self._primary_file_path()
         if not p:
-            QMessageBox.information(self, "KnotzFLix", "No file linked to this movie.")
+            show_toast(self, "No file linked to this movie.")
             return
         from pathlib import Path as _P
         playback.launch_external(_P(p))
+        # Seed Continue Watching with a small non-zero position for immediate visibility
+        mid = self._current_movie_id()
+        if mid is not None:
+            try:
+                self.db.set_play_state(PlayState(movie_id=int(mid), position_sec=60, watched=False))
+            except Exception:
+                pass
+            # Notify listeners (e.g., MainWindow) to refresh shelves
+            self.played.emit(int(mid))
 
     def _open_containing(self) -> None:
         p = self._primary_file_path()
         if not p:
-            QMessageBox.information(self, "KnotzFLix", "No file linked to this movie.")
+            show_toast(self, "No file linked to this movie.")
             return
         from pathlib import Path as _P
         playback.open_containing_folder(_P(p))
@@ -367,6 +380,7 @@ class PosterGrid(QWidget):
             return
         try:
             self.db.set_watched(int(mid), watched)
+            show_toast(self, "Marked watched" if watched else "Marked unwatched")
         except Exception:
             pass
 
@@ -376,6 +390,7 @@ class PosterGrid(QWidget):
             return
         try:
             self.db.reset_progress(int(mid))
+            show_toast(self, "Progress reset")
         except Exception:
             pass
 
@@ -383,18 +398,18 @@ class PosterGrid(QWidget):
         # If the primary file path is missing, allow the user to relink
         p = self._primary_file_path()
         if not p:
-            QMessageBox.information(self, "KnotzFLix", "No file to relink for this movie.")
+            show_toast(self, "No file to relink for this movie.")
             return
         from pathlib import Path as _P
         old = _P(p)
         if old.exists():
-            QMessageBox.information(self, "KnotzFLix", "File exists; no relink needed.")
+            show_toast(self, "File exists; no relink needed.")
             return
         new_path, _ = QFileDialog.getOpenFileName(self, "Locate File", old.parent.as_posix())
         if not new_path:
             return
         if self.db.relink_media_file_by_path(str(old), new_path):
-            QMessageBox.information(self, "KnotzFLix", "File relinked.")
+            show_toast(self, "File relinked.")
             self.refresh()
         else:
-            QMessageBox.warning(self, "KnotzFLix", "Could not relink this file.")
+            show_toast(self, "Could not relink this file.")

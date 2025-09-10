@@ -42,7 +42,7 @@ This roadmap is iterative. Each task includes acceptance criteria.
 
 ## Sprint 4 - Posters/Thumbnails (Offline)
 - [ ] Poster pipeline: frame picker with luminance/edge heuristics.  
-  Done when: ≥90% representative posters generated. (Pipeline exists; heuristics pending; simple timestamp used now.)
+  Done when: ≥90% representative posters generated. (Partial: deterministic multi-sample candidates + ffmpeg-based scoring using signalstats/edgedetect integrated; further tuning and golden tests for scoring to follow.)
 - [x] Cache system (content-addressed, size variants).  
   Done when: cache reused on rescans. (Implemented; verified.)
 - [x] Index titles/tags into FTS5.  
@@ -53,18 +53,18 @@ This roadmap is iterative. Each task includes acceptance criteria.
 ## Sprint 5 - UI: Grid & Navigation
 - [ ] Virtualized poster grid, keyboard navigation, focus ring.  
   Done when: first render ≤200ms; smooth scroll; Home/End work. (Initial QListView grid present; polish pending.)
-- [ ] Empty state screens + error toasts.  
-  Done when: no crashes on empty library or scan cancel. (Partial: empty state implemented; toast/error surfacing pending.)
+- [x] Empty state screens + error toasts.  
+  Done when: no crashes on empty library or scan cancel. (Empty state implemented; non-blocking toast widget added and wired in Library actions.)
 
 ---
 
 ## Sprint 6 - Details & Shelves
-- [ ] Details page (poster, title, year, file badges).  
-  Done when: opens ≤100ms; back navigation works.
+- [x] Details page (poster, title, year, file badges).  
+  Done when: opens ≤100ms; back navigation works. (Implemented minimal dialog with poster, badges, Play/Open, Regenerate Poster.)
 - [x] Shelves: Recently Added, By Folder.  
   Done when: correct contents after rescan. (Implemented; tabs added; synced with roots and rescans.)
-- [ ] Mark Watched + Continue Watching.  
-  Done when: states persist across sessions. (Partial: shelf and watched/unwatched/reset actions wired; automatic progress updates pending.)
+- [x] Mark Watched + Continue Watching.  
+  Done when: states persist across sessions. (Implemented: watched/unwatched/reset actions; Continue Watching shelf; seeds progress on Play; persists across sessions.)
 
 ---
 

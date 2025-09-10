@@ -6,6 +6,8 @@ from typing import Callable, Optional
 from infra import library_service
 from infra.config import AppConfig, load_config, save_config
 from infra.db import Database
+from infra import watcher as fs_watcher
+from infra import thumbnails
 
 
 def _qt_imports():
@@ -119,6 +121,22 @@ def create_main_window() -> "QMainWindow":
             self.continue_grid = PosterGrid(self.db, order_mode="default", id_allowlist=self.db.get_continue_watching_ids())
             self.tabs.addTab(self.continue_grid, "Continue Watching")
 
+            # Keep Continue Watching shelf fresh when a movie is played
+            def _update_continue_shelf(_mid: int) -> None:
+                try:
+                    ids = self.db.get_continue_watching_ids()
+                    self.continue_grid.model.set_id_allowlist(ids)
+                    self.continue_grid.refresh()
+                except Exception:
+                    pass
+
+            self.grid.played.connect(_update_continue_shelf)
+            self.recent.played.connect(_update_continue_shelf)
+            try:
+                self.by_folder.grid.played.connect(_update_continue_shelf)
+            except Exception:
+                pass
+
             # Settings tab
             self.roots_list = QListWidget()
             self._refresh_roots()
@@ -126,8 +144,17 @@ def create_main_window() -> "QMainWindow":
             remove_btn = QPushButton("Remove Selected"); remove_btn.clicked.connect(self.remove_selected_root)
             rescan_btn = QPushButton("Rescan All"); rescan_btn.clicked.connect(self.rescan)
             rescan_sel_btn = QPushButton("Rescan Selected"); rescan_sel_btn.clicked.connect(self.rescan_selected)
-            btn_row = QHBoxLayout(); btn_row.addWidget(add_btn); btn_row.addWidget(remove_btn); btn_row.addWidget(rescan_btn); btn_row.addWidget(rescan_sel_btn); btn_row.addStretch(1)
-            settings_layout = QVBoxLayout(); settings_layout.addWidget(self.roots_list); settings_layout.addLayout(btn_row)
+            validate_btn = QPushButton("Validate Posters"); validate_btn.clicked.connect(self.validate_posters)
+
+            # Status row (ffmpeg)
+            from PyQt6.QtWidgets import QLabel
+            self.ffmpeg_lbl = QLabel()
+            self._refresh_ffmpeg_status()
+
+            btn_row = QHBoxLayout(); btn_row.addWidget(add_btn); btn_row.addWidget(remove_btn); btn_row.addWidget(rescan_btn); btn_row.addWidget(rescan_sel_btn); btn_row.addWidget(validate_btn); btn_row.addStretch(1)
+            status_row = QHBoxLayout(); status_row.addWidget(QLabel("ffmpeg:")); status_row.addWidget(self.ffmpeg_lbl); status_row.addStretch(1)
+
+            settings_layout = QVBoxLayout(); settings_layout.addWidget(self.roots_list); settings_layout.addLayout(btn_row); settings_layout.addLayout(status_row)
             settings_page = QWidget(); settings_page.setLayout(settings_layout)
             self.tabs.addTab(settings_page, "Settings")
 
@@ -145,6 +172,26 @@ def create_main_window() -> "QMainWindow":
             self._watch_timer.setInterval(120_000)  # 2 minutes
             self._watch_timer.timeout.connect(self._on_watch_tick)
             self._watch_timer.start()
+
+            # Optional native FS watchers (watchdog) with debounce per-root
+            self._watch_handles = None
+            self._debounce: dict[str, QTimer] = {}
+
+            def _on_native_change(root_path: Path) -> None:
+                key = str(root_path)
+                t = self._debounce.get(key)
+                if t is None:
+                    t = QTimer(self)
+                    t.setSingleShot(True)
+                    t.setInterval(1500)
+                    t.timeout.connect(lambda rp=root_path: self._rescan_root_debounced(rp))
+                    self._debounce[key] = t
+                t.start()
+
+            try:
+                self._watch_handles = fs_watcher.start_watchers([Path(p) for p in self.cfg.library_roots], _on_native_change)
+            except Exception:
+                self._watch_handles = None
 
         def _refresh_roots(self) -> None:
             self.roots_list.clear()
@@ -231,11 +278,18 @@ def create_main_window() -> "QMainWindow":
                     self.continue_grid.refresh()
                 except Exception:
                     pass
+                # refresh ffmpeg status (could have been installed during runtime)
+                self._refresh_ffmpeg_status()
             except Exception:
                 pass
 
         def closeEvent(self, event) -> None:  # type: ignore[override]
             try:
+                if getattr(self, "_watch_handles", None):
+                    try:
+                        self._watch_handles.stop()
+                    except Exception:
+                        pass
                 self.db.close()
             finally:
                 super().closeEvent(event)
@@ -253,5 +307,112 @@ def create_main_window() -> "QMainWindow":
             worker.signals.finished.connect(lambda _s: self._on_scan_finished(_s))
             self._scan_thread = worker
             worker.start()
+
+        def _rescan_root_debounced(self, root: Path) -> None:
+            if self._scan_thread is not None and self._scan_thread.isRunning():  # type: ignore[union-attr]
+                return
+            worker = ScanWorker(self.db, [root], self.cfg.ignore_rules, self.cfg.concurrency, True)
+            worker.signals.progress.connect(lambda d, t: None)
+            worker.signals.finished.connect(lambda _s: self._on_scan_finished(_s))
+            self._scan_thread = worker
+            worker.start()
+
+        # Posters validation
+        def _refresh_ffmpeg_status(self) -> None:
+            ok, ver = thumbnails.ffmpeg_status()
+            self.ffmpeg_lbl.setText(ver if ok else "Not Found")
+
+        def validate_posters(self) -> None:
+            # Kick off background validator
+            PosterFixWorker = _make_poster_fix_worker_class()
+            worker = PosterFixWorker()
+            worker.signals.progress.connect(self._on_progress)
+            def _after(_summary: object) -> None:
+                self._on_scan_finished(_summary)
+            worker.signals.finished.connect(_after)
+            self.progress.setVisible(True); self.progress.setValue(0)
+            worker.start()
+
+    # Poster fixer worker
+    def _make_poster_fix_worker_class():
+        from PyQt6.QtCore import QThread, QObject, pyqtSignal
+
+        class _Signals(QObject):
+            progress = pyqtSignal(int, int)
+            finished = pyqtSignal(object)
+
+        class PosterFixWorker(QThread):
+            def __init__(self) -> None:
+                super().__init__()
+                self.signals = _Signals()
+
+            def run(self) -> None:
+                from infra.db import Database
+                from infra import thumbnails, fingerprinter
+                from pathlib import Path as _P
+
+                db = Database()
+                try:
+                    # Load all movie ids
+                    cur = db.conn.execute("SELECT id, runtime_sec FROM movie ORDER BY id")
+                    rows = cur.fetchall()
+                    total = len(rows)
+                    fixed = 0
+                    for i, row in enumerate(rows, start=1):
+                        mid = int(row[0])
+                        runtime = row[1]
+                        # get current poster
+                        imgs = db.get_images_for_movie(mid, kind="poster")
+                        img = imgs[0] if imgs else None
+                        # get primary media file
+                        mfiles = db.get_media_files_for_movie(mid)
+                        if not mfiles:
+                            self.signals.progress.emit(i, total)
+                            continue
+                        mf = mfiles[0]
+                        # compute fingerprint if missing
+                        fp = mf.fingerprint
+                        if not fp:
+                            try:
+                                fp = fingerprinter.fingerprint_partial(_P(mf.path))
+                            except Exception:
+                                fp = None
+                        if not fp:
+                            self.signals.progress.emit(i, total)
+                            continue
+
+                        # Decide if needs regen
+                        needs_regen = False
+                        if img is None:
+                            needs_regen = True
+                        else:
+                            try:
+                                p = _P(img.path)
+                                if (not p.exists()) or (p.stat().st_size < 2048) or ((img.src or "") == "placeholder"):
+                                    needs_regen = True
+                            except Exception:
+                                needs_regen = True
+
+                        if needs_regen:
+                            out, _ = thumbnails.generate_poster(_P(mf.path), file_fingerprint=fp, duration_sec=float(runtime) if runtime else None, dry_run=False, force=True)
+                            try:
+                                from infra.thumbnails import detect_poster_source
+                                src = detect_poster_source(out)
+                            except Exception:
+                                src = "ffmpeg" if out.exists() else "placeholder"
+                            if img is None:
+                                from domain.models import Image
+                                db.add_image(Image(id=None, movie_id=mid, kind='poster', path=str(out), src=src))
+                            else:
+                                img.path = str(out)
+                                img.src = src
+                                db.add_image(img)
+                            fixed += 1
+                        self.signals.progress.emit(i, total)
+                    self.signals.finished.emit({"total": total, "fixed": fixed})
+                finally:
+                    db.close()
+
+        return PosterFixWorker
 
     return MainWindow()

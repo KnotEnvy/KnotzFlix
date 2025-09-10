@@ -15,7 +15,10 @@ This section captures recent changes and conventions to align future agents.
 - Details view: Implemented minimal dialog (poster, title/year, basic badges, Play/Open Folder).
 - Shelves: Added tabs for Recently Added and By Folder (filters by selected root).
 - Locate Missing flow: Context menu action to relink a missing file path.
-- Watchers: Added lightweight polling fallback (QTimer) for periodic rescans; platform-specific watchers remain TODO.
+- Watchers: Added lightweight polling fallback (QTimer) and optional native watchers via `watchdog` if installed.
+- Toasts: Non-blocking toast widget added; used for Library actions.
+- Poster heuristics (v2 scaffolding): Deterministic multi-candidate timestamp selection integrated; generator now tries several candidates if thumbnail filter fails.
+- Toasts: Non-blocking toast widget added; used for Library actions.
 
 ### Key Implementation Notes
 - Threading/SQLite: Never share a `sqlite3.Connection` across threads. `ui.main_window.ScanWorker` opens a thread-local `Database` inside `run()`.
@@ -47,13 +50,13 @@ This section captures recent changes and conventions to align future agents.
 - Goal: Local‑first, offline Netflix‑style movie manager.
 - Stack: Python 3.11+, PyQt6 (MVVM), SQLite + FTS5, ffmpeg/ffprobe.
 - Repo layout: `ui/`, `domain/`, `infra/`, `tests/`.
-- Status: Backend foundations, DB, scanning, parsing, hashing, basic posters cache, and minimal UI tabs (Library + Settings) are in. 24 tests passing.
+- Status: Backend foundations, DB, scanning, parsing, hashing, posters cache, focus IPC, instant search, Library/Recently Added/By Folder/Continue Watching tabs, Details dialog, and Locate Missing are in. Tests passing.
 
 ## What’s Implemented
 - Foundations
   - Data dirs (per‑OS) + `KNOTZFLIX_DATA_DIR` override for tests.
   - Rotating logs; JSON config persisted as `settings.json`.
-  - Single‑instance lock (file lock). Focus IPC pending.
+  - Single‑instance lock (file lock) + focus IPC via localhost.
 - Database
   - Migrations: v1 (core tables) + v2 (media metadata columns). FTS5 triggers keep index in sync.
   - CRUD + helpers (get by title/year, upsert media files, search, relink by path, images API).
@@ -69,18 +72,15 @@ This section captures recent changes and conventions to align future agents.
 - Playback & File Handling
   - Cross‑platform launch/default player commands and “open containing folder” (infra level).
 - UI (early)
-  - App shell with tabs: Library (poster grid) + Settings (roots list + Add/Rescan buttons).
-  - Threaded scan with responsive progress bar; summary message; Library grid refresh.
+  - App shell with tabs: Library (poster grid with instant search), Recently Added, By Folder, Continue Watching, Settings.
+  - Threaded scan with responsive progress bar; summary message; toasts for common actions; Library grids refresh.
 
 ## What’s Not Done (or Partial)
-- Single‑instance focus (bring existing window to front): lock exists; IPC not wired.
-- Posters heuristic: currently simple timestamp; luminance/edge heuristics still to implement.
-- UI grid: basic QListView icon grid; needs virtualization sizing, keyboard focus ring polish, and type‑ahead.
-- Instant search UI: FTS5 is in place; UI textbox/filter missing.
-- Details page + shelves: not started.
-- Locate Missing flow UI: DB relink helper exists; UI to guide users not done.
-- Watchers (inotify/FSEvents/USN) and scoped rescans: not started.
-- Packaging/first‑run wizard and QA hardening: not started.
+- Posters heuristic: advanced luminance/edge heuristics still to implement (currently thumbnail filter + timestamp fallback).
+- UI grid polish: virtualization sizing, focus ring styling, and performance validation targets.
+- Continue Watching: refine progress updates beyond initial seeding on Play.
+- Real FS watchers: inotify/FSEvents/USN via native APIs; `watchdog` optional support added; polling fallback exists.
+- Packaging/first‑run wizard and QA hardening.
 
 ## How to Run
 - Tests (recommended): `python scripts/run_unittests.py`
@@ -117,12 +117,11 @@ This section captures recent changes and conventions to align future agents.
 - Run all: `python scripts/run_unittests.py`
 
 ## Immediate Next Steps (recommended)
-1) Single‑instance focus IPC: small local TCP socket or named pipe; on second launch, send “focus” to running app; main window calls `raise()/activateWindow()`.
-2) UI instant search: add a search box; query FTS5 and filter the model; target ≤100ms for 10k items.
-3) Poster heuristics: brightness/edge based frame selection; add golden tests; keep deterministic seed.
-4) Details view: show poster, title, year, runtime, res (badges), open/play buttons.
-5) Empty state + toast errors: handle empty library and scan cancellation gracefully.
-6) Watchers: add platform watchers + polling fallback; wire to per‑root rescans.
+1) Poster heuristics v2: implement brightness/edge scoring via ffmpeg signalstats/metadata on the deterministic candidate set; add golden tests for scoring fallbacks.
+2) Grid performance + keyboard polish: verify ≤200ms first render, scroll smoothness, focus ring; refine PageUp/Down behavior by viewport rows/cols.
+3) Continue Watching: wire progress updates on external playback handoff; refine progress badges.
+4) Real FS watchers: add inotify/FSEvents/USN with opt-in and keep polling fallback.
+5) First-run wizard + packaging: streamline onboarding and produce installers.
 
 ## Notes & Decisions
 - Fingerprint hashing uses blake2b for now to avoid extra deps; easily swappable to BLAKE3 later.

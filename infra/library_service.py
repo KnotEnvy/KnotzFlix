@@ -149,11 +149,27 @@ def scan_and_index(
                     duration_sec=duration_for_poster,
                     dry_run=False,
                 )
+                # If an existing tiny placeholder remains from older versions, refresh it
+                try:
+                    if out_path.exists() and out_path.stat().st_size < 2048:
+                        out_path, _ = thumbnails.generate_poster(
+                            Path(after.path),
+                            file_fingerprint=fp,
+                            duration_sec=duration_for_poster,
+                            dry_run=False,
+                            force=True,
+                        )
+                except Exception:
+                    pass
                 # add image row if not present
                 imgs = db.get_images_for_movie(int(movie_id), kind="poster")
                 if not any(Path(img.path) == out_path for img in imgs):
-                    # src hints at creation method
-                    src = "ffmpeg" if out_path.exists() else "placeholder"
+                    # src hints at creation method (detect placeholder vs real)
+                    try:
+                        from .thumbnails import detect_poster_source
+                        src = detect_poster_source(out_path)
+                    except Exception:
+                        src = "ffmpeg" if out_path.exists() else "placeholder"
                     db.add_image(Image(id=None, movie_id=int(movie_id), kind="poster", path=str(out_path), src=src))
             except Exception:
                 pass

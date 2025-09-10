@@ -15,6 +15,7 @@ class Roles:
     YearRole = Qt.ItemDataRole.UserRole + 3
     PosterPathRole = Qt.ItemDataRole.UserRole + 4
     ProgressRole = Qt.ItemDataRole.UserRole + 5
+    PosterIsPlaceholderRole = Qt.ItemDataRole.UserRole + 6
 
 
 class MovieListModel(QAbstractListModel):
@@ -68,6 +69,7 @@ class MovieListModel(QAbstractListModel):
                 """
                 SELECT m.id, m.canonical_title, m.year, m.runtime_sec,
                        (SELECT path FROM image WHERE movie_id=m.id AND kind='poster' LIMIT 1) AS poster,
+                       (SELECT src FROM image WHERE movie_id=m.id AND kind='poster' LIMIT 1) AS poster_src,
                        (SELECT position_sec FROM play_state WHERE movie_id=m.id) AS position_sec,
                        (SELECT watched FROM play_state WHERE movie_id=m.id) AS watched
                 FROM movie m
@@ -89,6 +91,7 @@ class MovieListModel(QAbstractListModel):
                 """
                 SELECT m.id, m.canonical_title, m.year, m.runtime_sec,
                        (SELECT path FROM image WHERE movie_id=m.id AND kind='poster' LIMIT 1) AS poster,
+                       (SELECT src FROM image WHERE movie_id=m.id AND kind='poster' LIMIT 1) AS poster_src,
                        (SELECT position_sec FROM play_state WHERE movie_id=m.id) AS position_sec,
                        (SELECT watched FROM play_state WHERE movie_id=m.id) AS watched
                 FROM movie m
@@ -106,8 +109,9 @@ class MovieListModel(QAbstractListModel):
                 "year": row[2],
                 "runtime": row[3],
                 "poster": row[4],
-                "position": row[5],
-                "watched": bool(row[6]) if row[6] is not None else False,
+                "poster_src": row[5],
+                "position": row[6],
+                "watched": bool(row[7]) if row[7] is not None else False,
             }
             for row in cur.fetchall()
         ]
@@ -165,6 +169,8 @@ class MovieListModel(QAbstractListModel):
             return it["year"]
         if role == Roles.PosterPathRole:
             return it.get("poster")
+        if role == Roles.PosterIsPlaceholderRole:
+            return (it.get("poster_src") or "") == "placeholder"
         if role == Roles.ProgressRole:
             pos = it.get("position") or 0
             runtime = it.get("runtime") or 0
@@ -182,4 +188,5 @@ class MovieListModel(QAbstractListModel):
         names[Roles.YearRole] = b"year"
         names[Roles.PosterPathRole] = b"poster"
         names[Roles.ProgressRole] = b"progress"
+        names[Roles.PosterIsPlaceholderRole] = b"poster_is_placeholder"
         return names
