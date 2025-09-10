@@ -28,6 +28,7 @@ class MovieListModel(QAbstractListModel):
         self._order_mode = order_mode  # "default" (sort_title) or "recent" (created_at desc)
         self._path_prefix = path_prefix
         self._id_allowlist: Optional[list[int]] = id_allowlist
+        self._id_blocklist: Optional[set[int]] = None
         self.refresh()
 
     def refresh(self) -> None:
@@ -115,6 +116,10 @@ class MovieListModel(QAbstractListModel):
             }
             for row in cur.fetchall()
         ]
+        # Apply blocklist if present
+        if self._id_blocklist:
+            blocked = self._id_blocklist
+            self._items = [it for it in self._items if int(it["id"]) not in blocked]
         self._icon_cache.clear()
         self.endResetModel()
 
@@ -137,6 +142,10 @@ class MovieListModel(QAbstractListModel):
 
     def set_id_allowlist(self, ids: Optional[list[int]]) -> None:
         self._id_allowlist = ids
+        self.refresh()
+
+    def set_id_blocklist(self, ids: Optional[list[int] | set[int]]) -> None:
+        self._id_blocklist = set(ids) if ids else None
         self.refresh()
 
     # Qt model interface

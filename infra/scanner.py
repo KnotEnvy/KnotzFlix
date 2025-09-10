@@ -28,9 +28,9 @@ def iter_video_files(roots: Iterable[Path], ignore_rules: Iterable[str]) -> Iter
         if not root.exists():
             continue
         for dirpath, dirnames, filenames in os.walk(root):
-            # prune hidden and Extras directories
+            # prune hidden and Extras/Sample directories
             dirnames[:] = [
-                d for d in dirnames if not _is_hidden(d) and d.lower() not in {"extras"}
+                d for d in dirnames if not _is_hidden(d) and d.lower() not in {"extras", "sample", "samples"}
             ]
 
             for fn in filenames:
@@ -39,7 +39,7 @@ def iter_video_files(roots: Iterable[Path], ignore_rules: Iterable[str]) -> Iter
                 lowered = fn.lower()
                 if any(pat.lower() in lowered for pat in ("thumbs.db", "desktop.ini")):
                     continue
-                # simple sample.* filter
+                # simple sample.* filter (files named sample.*)
                 if lowered.startswith("sample."):
                     continue
                 p = Path(dirpath) / fn
@@ -61,4 +61,3 @@ def scan(roots: Iterable[Path], ignore_rules: Iterable[str], workers: int = 8) -
         return [stat_path(p) for p in files]
     with ThreadPoolExecutor(max_workers=workers) as ex:
         return list(ex.map(stat_path, files))
-

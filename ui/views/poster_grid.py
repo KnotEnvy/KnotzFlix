@@ -298,6 +298,13 @@ class PosterGrid(QWidget):
         self.view.setVisible(has_items)
         self.empty.setVisible(not has_items)
 
+    # UI helpers
+    def set_empty_message(self, text: str) -> None:
+        try:
+            self.empty.setText(text)
+        except Exception:
+            pass
+
     # Actions
     def _current_movie_id(self) -> int | None:
         idx = self.view.currentIndex()

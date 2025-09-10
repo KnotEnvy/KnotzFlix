@@ -425,6 +425,10 @@ class Database:
         )
         return [int(r[0]) for r in cur.fetchall()]
 
+    def get_all_movie_ids(self) -> list[int]:
+        cur = self.conn.execute("SELECT id FROM movie ORDER BY id")
+        return [int(r[0]) for r in cur.fetchall()]
+
     # Play state helpers
     def get_play_state(self, movie_id: int) -> Optional[PlayState]:
         cur = self.conn.execute(

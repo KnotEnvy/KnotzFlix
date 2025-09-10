@@ -11,14 +11,13 @@ This section captures recent changes and conventions to align future agents.
 ### Status Deltas
 - Single-instance focus IPC: Implemented. Second launch pings the running app over localhost and brings the window to front.
 - Instant search UI: Implemented in Library tab. Uses FTS5 when available with safe tokenization; falls back to LIKE.
-- Posters heuristic: Improved. Tries ffmpeg `thumbnail` filter first, then timestamp fallback; still falls back to placeholder if all else fails.
+- Posters heuristic: Improved. Prefers ffmpeg `thumbnail`; then scores deterministic candidate timestamps via `signalstats`/`edgedetect`; falls back to placeholder if needed.
 - Details view: Implemented minimal dialog (poster, title/year, basic badges, Play/Open Folder).
 - Shelves: Added tabs for Recently Added and By Folder (filters by selected root).
 - Locate Missing flow: Context menu action to relink a missing file path.
 - Watchers: Added lightweight polling fallback (QTimer) and optional native watchers via `watchdog` if installed.
 - Toasts: Non-blocking toast widget added; used for Library actions.
-- Poster heuristics (v2 scaffolding): Deterministic multi-candidate timestamp selection integrated; generator now tries several candidates if thumbnail filter fails.
-- Toasts: Non-blocking toast widget added; used for Library actions.
+- Validate Posters: One-click fixer in Settings; ffmpeg status indicator.
 
 ### Key Implementation Notes
 - Threading/SQLite: Never share a `sqlite3.Connection` across threads. `ui.main_window.ScanWorker` opens a thread-local `Database` inside `run()`.
@@ -32,7 +31,7 @@ This section captures recent changes and conventions to align future agents.
 - Search debounce: 120 ms via QTimer. Tune as needed to meet ≤100 ms budget on large libraries.
 
 ### Tests & Validation
-- Run tests: `python scripts/run_unittests.py` (25 tests passing at time of update).
+- Run tests: `python scripts/run_unittests.py` (31 tests passing at time of update).
 - If you change thumbnails behavior, ensure `tests/test_thumbnails.py` expectations remain valid (dry-run returns a timestamp-based ffmpeg command containing `-ss` and `-vf`).
 
 ### Open Items (PRD/Checklist)
@@ -68,7 +67,7 @@ This section captures recent changes and conventions to align future agents.
   - Partial fingerprint via blake2b (dependency‑free). Duplicate grouping and rename relink implemented.
 - Posters/Cache
   - Content‑addressed cache with sharded paths; idempotent reuse.
-  - Poster generator (ffmpeg if available; otherwise 1×1 JPEG placeholder). Timestamp heuristic (20% into video) as a baseline.
+  - Poster generator (ffmpeg if available; otherwise valid 1×1 PNG placeholder). Deterministic timestamp candidates + scoring.
 - Playback & File Handling
   - Cross‑platform launch/default player commands and “open containing folder” (infra level).
 - UI (early)
@@ -104,13 +103,16 @@ This section captures recent changes and conventions to align future agents.
 - `infra/fingerprinter.py`: partial blake2b fingerprint.
 - `infra/ffprobe.py`: safe probe + JSON parse to `MediaInfo`.
 - `infra/cache.py`: content‑addressed cache utils.
-- `infra/thumbnails.py`: poster generation (ffmpeg or placeholder), cache integration.
+- `infra/thumbnails.py`: poster generation (ffmpeg or placeholder), scoring, cache integration, ffmpeg status.
 - `infra/library_service.py`: end‑to‑end scan → index → dupes/rename → probe → poster.
 - `infra/playback.py`: external player launch + reveal in OS file explorer.
+- `infra/ipc_focus.py`: localhost-based single-instance window focus IPC.
+- `infra/watcher.py`: optional native watchers via watchdog; used with UI debounce.
 - `ui/app.py`: app entry + single‑instance guard.
 - `ui/main_window.py`: tabs, folder chooser, rescan, progress.
 - `ui/models/movie_list_model.py`: list model for movies with poster decoration.
-- `ui/views/poster_grid.py`: grid view scaffold.
+- `ui/views/poster_grid.py`: grid view with poster rendering, context actions.
+- `ui/widgets/toast.py`: non-blocking toasts.
 
 ## Tests
 - `tests/*` cover: paths/config/logging, DB CRUD/indexing, scanner/parser, fingerprinter, library service flows (dupes, rename, poster creation), ffprobe parsing, and playback commands.
@@ -132,7 +134,7 @@ This section captures recent changes and conventions to align future agents.
 ## Troubleshooting
 - Tests failing due to path imports: ensure project root on `sys.path` or run via `scripts/run_unittests.py`.
 - Windows `python -c` quoting in PowerShell: prefer using scripts to avoid quoting pitfalls.
-- If ffmpeg is present but poster generation fails on synthetic inputs, the fallback placeholder ensures stability.
+- Posters: Check Settings for ffmpeg status; use “Validate Posters” to regenerate missing/placeholder posters; logs show failures.
 
 ## PRD & Checklist
 - Authoritative plan lives in `DOCS/PRD.md` and `DOCS/DevChecklist.md`.

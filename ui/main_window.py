@@ -101,7 +101,7 @@ def create_main_window() -> "QMainWindow":
             self.cfg: AppConfig = load_config()
             self.db = Database(); self.db.initialize()
 
-            # Tabs: Library + Recently Added + By Folder + Settings
+            # Tabs: Library + Recently Added + By Folder + Private + Settings
             from PyQt6.QtWidgets import QTabWidget
             from ui.views.poster_grid import PosterGrid
             from ui.views.by_folder import ByFolderView
@@ -120,6 +120,12 @@ def create_main_window() -> "QMainWindow":
             from PyQt6.QtWidgets import QWidget
             self.continue_grid = PosterGrid(self.db, order_mode="default", id_allowlist=self.db.get_continue_watching_ids())
             self.tabs.addTab(self.continue_grid, "Continue Watching")
+
+            # Private tab (locked by default)
+            self._private_unlocked: bool = False
+            self._private_ids: list[int] = []
+            self.private_grid = PosterGrid(self.db, order_mode="default", id_allowlist=[])
+            self._private_tab_index = self.tabs.addTab(self.private_grid, "Private")
 
             # Keep Continue Watching shelf fresh when a movie is played
             def _update_continue_shelf(_mid: int) -> None:
@@ -141,7 +147,10 @@ def create_main_window() -> "QMainWindow":
             self.roots_list = QListWidget()
             self._refresh_roots()
             add_btn = QPushButton("Add Folder…"); add_btn.clicked.connect(self.add_folder)
+            add_priv_btn = QPushButton("Add Private Folder…"); add_priv_btn.clicked.connect(self.add_private_folder)
             remove_btn = QPushButton("Remove Selected"); remove_btn.clicked.connect(self.remove_selected_root)
+            mark_priv_btn = QPushButton("Mark Selected Private"); mark_priv_btn.clicked.connect(self.mark_selected_private)
+            mark_pub_btn = QPushButton("Mark Selected Public"); mark_pub_btn.clicked.connect(self.mark_selected_public)
             rescan_btn = QPushButton("Rescan All"); rescan_btn.clicked.connect(self.rescan)
             rescan_sel_btn = QPushButton("Rescan Selected"); rescan_sel_btn.clicked.connect(self.rescan_selected)
             validate_btn = QPushButton("Validate Posters"); validate_btn.clicked.connect(self.validate_posters)
@@ -151,10 +160,19 @@ def create_main_window() -> "QMainWindow":
             self.ffmpeg_lbl = QLabel()
             self._refresh_ffmpeg_status()
 
-            btn_row = QHBoxLayout(); btn_row.addWidget(add_btn); btn_row.addWidget(remove_btn); btn_row.addWidget(rescan_btn); btn_row.addWidget(rescan_sel_btn); btn_row.addWidget(validate_btn); btn_row.addStretch(1)
+            # Private access controls
+            set_code_btn = QPushButton("Set Private Code…"); set_code_btn.clicked.connect(self.set_private_code)
+            unlock_btn = QPushButton("Unlock Private…"); unlock_btn.clicked.connect(self.unlock_private)
+            lock_btn = QPushButton("Lock Private"); lock_btn.clicked.connect(self.lock_private)
+
+            btn_row = QHBoxLayout();
+            btn_row.addWidget(add_btn); btn_row.addWidget(add_priv_btn); btn_row.addWidget(remove_btn)
+            btn_row.addWidget(mark_priv_btn); btn_row.addWidget(mark_pub_btn)
+            btn_row.addWidget(rescan_btn); btn_row.addWidget(rescan_sel_btn); btn_row.addWidget(validate_btn); btn_row.addStretch(1)
+            priv_row = QHBoxLayout(); priv_row.addWidget(set_code_btn); priv_row.addWidget(unlock_btn); priv_row.addWidget(lock_btn); priv_row.addStretch(1)
             status_row = QHBoxLayout(); status_row.addWidget(QLabel("ffmpeg:")); status_row.addWidget(self.ffmpeg_lbl); status_row.addStretch(1)
 
-            settings_layout = QVBoxLayout(); settings_layout.addWidget(self.roots_list); settings_layout.addLayout(btn_row); settings_layout.addLayout(status_row)
+            settings_layout = QVBoxLayout(); settings_layout.addWidget(self.roots_list); settings_layout.addLayout(btn_row); settings_layout.addLayout(priv_row); settings_layout.addLayout(status_row)
             settings_page = QWidget(); settings_page.setLayout(settings_layout)
             self.tabs.addTab(settings_page, "Settings")
 
@@ -193,6 +211,9 @@ def create_main_window() -> "QMainWindow":
             except Exception:
                 self._watch_handles = None
 
+            # Initialize private filters and tab state
+            self._refresh_private_filters()
+
         def _refresh_roots(self) -> None:
             self.roots_list.clear()
             for r in self.cfg.library_roots:
@@ -202,10 +223,15 @@ def create_main_window() -> "QMainWindow":
                 self.by_folder.folders.clear()
                 self.by_folder.folders.addItem("All")
                 for r in self.cfg.library_roots:
+                    # Hide private roots when locked
+                    if (not self._private_unlocked) and (r in set(self.cfg.private_roots)):
+                        continue
                     self.by_folder.folders.addItem(r)
                 self.by_folder.folders.setCurrentRow(0)
             except Exception:
                 pass
+            # Update private ids when roots change
+            self._refresh_private_filters()
 
         def add_folder(self) -> None:
             folder = QFileDialog.getExistingDirectory(self, "Select Movie Folder")
@@ -218,15 +244,54 @@ def create_main_window() -> "QMainWindow":
             else:
                 QMessageBox.information(self, "KnotzFLix", "Folder already added.")
 
+        def add_private_folder(self) -> None:
+            folder = QFileDialog.getExistingDirectory(self, "Select Private Folder")
+            if not folder:
+                return
+            if folder not in self.cfg.library_roots:
+                self.cfg.library_roots.append(folder)
+            if folder not in self.cfg.private_roots:
+                self.cfg.private_roots.append(folder)
+            save_config(self.cfg)
+            self._refresh_roots()
+
         def remove_selected_root(self) -> None:
             row = self.roots_list.currentRow()
             if row < 0:
                 QMessageBox.information(self, "KnotzFLix", "Select a folder to remove.")
                 return
             try:
-                self.cfg.library_roots.pop(row)
+                path = self.cfg.library_roots.pop(row)
+                try:
+                    self.cfg.private_roots.remove(path)
+                except ValueError:
+                    pass
             except Exception:
                 return
+            save_config(self.cfg)
+            self._refresh_roots()
+
+        def mark_selected_private(self) -> None:
+            row = self.roots_list.currentRow()
+            if row < 0:
+                QMessageBox.information(self, "KnotzFLix", "Select a folder to mark private.")
+                return
+            path = self.roots_list.item(row).text()
+            if path not in self.cfg.private_roots:
+                self.cfg.private_roots.append(path)
+                save_config(self.cfg)
+                self._refresh_roots()
+
+        def mark_selected_public(self) -> None:
+            row = self.roots_list.currentRow()
+            if row < 0:
+                QMessageBox.information(self, "KnotzFLix", "Select a folder to mark public.")
+                return
+            path = self.roots_list.item(row).text()
+            try:
+                self.cfg.private_roots.remove(path)
+            except ValueError:
+                pass
             save_config(self.cfg)
             self._refresh_roots()
 
@@ -271,6 +336,8 @@ def create_main_window() -> "QMainWindow":
                 self.recent.refresh()
                 # by_folder grid refreshes via same model
                 self.by_folder.grid.refresh()
+                # Update private filters post-scan
+                self._refresh_private_filters()
                 # refresh continue watching allowlist
                 try:
                     ids = self.db.get_continue_watching_ids()
@@ -280,6 +347,88 @@ def create_main_window() -> "QMainWindow":
                     pass
                 # refresh ffmpeg status (could have been installed during runtime)
                 self._refresh_ffmpeg_status()
+            except Exception:
+                pass
+
+        # Private helpers
+        def _hash_private_code(self, code: str) -> str:
+            import hashlib
+            # Use a short person string (<=16 bytes) for domain separation
+            h = hashlib.blake2b(code.encode("utf-8"), digest_size=32, person=b"knotzflix-priv")
+            return h.hexdigest()
+
+        def set_private_code(self) -> None:
+            from PyQt6.QtWidgets import QInputDialog
+            code, ok = QInputDialog.getText(self, "Set Private Code", "Enter new code:")
+            if not ok or not code:
+                return
+            code2, ok2 = QInputDialog.getText(self, "Confirm Private Code", "Re-enter code:")
+            if not ok2 or code2 != code:
+                QMessageBox.warning(self, "KnotzFLix", "Codes do not match.")
+                return
+            self.cfg.private_code_hash = self._hash_private_code(code)
+            save_config(self.cfg)
+            QMessageBox.information(self, "KnotzFLix", "Private code updated.")
+
+        def unlock_private(self) -> None:
+            if not self.cfg.private_code_hash:
+                QMessageBox.information(self, "KnotzFLix", "Set a private code first.")
+                return
+            from PyQt6.QtWidgets import QInputDialog
+            code, ok = QInputDialog.getText(self, "Unlock Private", "Enter private code:")
+            if not ok:
+                return
+            if self._hash_private_code(code) == self.cfg.private_code_hash:
+                self._private_unlocked = True
+                self._refresh_private_filters()
+                QMessageBox.information(self, "KnotzFLix", "Private unlocked.")
+            else:
+                QMessageBox.warning(self, "KnotzFLix", "Incorrect code.")
+
+        def lock_private(self) -> None:
+            self._private_unlocked = False
+            self._refresh_private_filters()
+            QMessageBox.information(self, "KnotzFLix", "Private locked.")
+
+        def _compute_private_ids(self) -> list[int]:
+            ids: set[int] = set()
+            for r in self.cfg.private_roots:
+                try:
+                    for mid in self.db.get_movie_ids_by_path_prefix(r):
+                        ids.add(int(mid))
+                except Exception:
+                    pass
+            return sorted(ids)
+
+        def _refresh_private_filters(self) -> None:
+            # Recompute private ids
+            self._private_ids = self._compute_private_ids()
+            # Update Private tab allowlist if unlocked
+            if self._private_unlocked:
+                self.private_grid.model.set_id_allowlist(self._private_ids)
+            else:
+                self.private_grid.model.set_id_allowlist([])
+            self.private_grid.refresh()
+            # Exclude private ids from main grids when locked
+            exclude = [] if self._private_unlocked else self._private_ids
+            try:
+                self.grid.model.set_id_blocklist(exclude)
+                self.grid.refresh()
+            except Exception:
+                pass
+            try:
+                self.recent.model.set_id_blocklist(exclude)
+                self.recent.refresh()
+            except Exception:
+                pass
+            # Update Private tab UI cues
+            try:
+                if self._private_unlocked:
+                    self.tabs.setTabText(self._private_tab_index, "Private")
+                    self.private_grid.set_empty_message("No private movies yet.")
+                else:
+                    self.tabs.setTabText(self._private_tab_index, "Private 🔒")
+                    self.private_grid.set_empty_message("🔒 Private library is locked. Unlock in Settings.")
             except Exception:
                 pass
 

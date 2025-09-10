@@ -22,12 +22,18 @@ class AppConfig:
     """
 
     library_roots: list[str] = field(default_factory=list)
+    # Folders whose contents are hidden from the main Library unless unlocked
+    private_roots: list[str] = field(default_factory=list)
+    # Blake2b hex digest of the private access code (optional)
+    private_code_hash: str | None = None
     concurrency: int = max(os.cpu_count() or 2, 2)
     ignore_rules: list[str] = field(
         default_factory=lambda: [
             "sample.*",
             "*/Extras/*",
             "*/extras/*",
+            "*/sample/*",
+            "*/samples/*",
             "Thumbs.db",
             "desktop.ini",
         ]
@@ -53,4 +59,3 @@ def load_config() -> AppConfig:
 def save_config(cfg: AppConfig) -> None:
     path = _settings_path()
     path.write_text(json.dumps(asdict(cfg), indent=2), encoding="utf-8")
-
