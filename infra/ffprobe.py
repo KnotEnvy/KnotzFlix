@@ -42,14 +42,15 @@ def parse_ffprobe_json(data: dict[str, Any]) -> MediaInfo:
 def probe(path: Path, timeout_sec: int = 10) -> Optional[MediaInfo]:
     """Run ffprobe on a media file, returning parsed MediaInfo or None on failure.
 
-    Requires ffprobe to be present on PATH. This function never raises on failure.
+    Requires ffprobe to be present on PATH or configured. This function never raises on failure.
     """
-    if not shutil.which("ffprobe"):
+    exe = get_ffprobe_exe()
+    if not exe:
         return None
     try:
         result = subprocess.run(
             [
-                "ffprobe",
+                exe,
                 "-v",
                 "quiet",
                 "-print_format",
@@ -68,5 +69,5 @@ def probe(path: Path, timeout_sec: int = 10) -> Optional[MediaInfo]:
         data = json.loads(result.stdout)
         return parse_ffprobe_json(data)
     except Exception:
+        from .exec_paths import get_ffprobe_exe
         return None
-

@@ -7,7 +7,13 @@ import signal
 import subprocess
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+repo_root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(repo_root))
+
+# Prepend bundled bin folder to PATH if present (lets you drop ffmpeg/ffprobe into repo/bin)
+_bin = repo_root / "bin"
+if _bin.is_dir():
+    os.environ["PATH"] = str(_bin) + os.pathsep + os.environ.get("PATH", "")
 
 from infra.single_instance import SingleInstance  # type: ignore
 from infra import ipc_focus  # type: ignore

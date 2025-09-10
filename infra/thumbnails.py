@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from .cache import content_addressed_path
+from .exec_paths import get_ffmpeg_exe
 import hashlib
 import random
 import re
@@ -123,8 +124,11 @@ def _parse_signalstats(text: str) -> dict[str, float]:
 
 
 def _ffmpeg_signalstats(media_path: Path, ts_sec: float, *, filter_chain: str) -> dict[str, float]:
+    exe = get_ffmpeg_exe()
+    if not exe:
+        return {}
     cmd = [
-        "ffmpeg",
+        exe,
         "-hide_banner",
         "-nostdin",
         "-ss",
@@ -185,7 +189,7 @@ def build_ffmpeg_cmd(input_path: Path, out_path: Path, ts_sec: float, height: in
     # Ensure even dimensions for codecs
     vf = f"scale=-2:{height}"
     return [
-        "ffmpeg",
+        get_ffmpeg_exe() or "ffmpeg",
         "-y",
         "-ss",
         f"{ts_sec:.2f}",
@@ -205,7 +209,7 @@ def build_ffmpeg_cmd_thumbnail(input_path: Path, out_path: Path, height: int, qu
     # Use ffmpeg's thumbnail filter to pick a representative frame automatically.
     vf = f"thumbnail,scale=-2:{height}"
     return [
-        "ffmpeg",
+        get_ffmpeg_exe() or "ffmpeg",
         "-y",
         "-i",
         str(input_path),
@@ -240,7 +244,7 @@ def generate_poster(
         # For tests, expose the timestamp-based command shape (deterministic ts)
         return out, ts_cmd
 
-    if shutil.which("ffmpeg"):
+    if get_ffmpeg_exe():
         # Try thumbnail heuristic first
         try:
             res = subprocess.run(thumb_cmd, capture_output=True, text=True, timeout=30)
@@ -300,7 +304,7 @@ def detect_poster_source(path: Path) -> str:
 
 def ffmpeg_status() -> tuple[bool, str]:
     """Return (available, version_string)."""
-    exe = shutil.which("ffmpeg")
+    exe = get_ffmpeg_exe()
     if not exe:
         return False, "ffmpeg not found"
     try:
