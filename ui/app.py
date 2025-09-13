@@ -30,11 +30,40 @@ def run() -> int:
 
 def _run_qt() -> int:
     from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QTimer
+    import time
 
     from ui.main_window import create_main_window
+    from ui.widgets.splash import KnotzFlixSplash
 
     app = QApplication([])
+    app.setApplicationName("KnotzFLix")
+    app.setApplicationVersion("1.0.0")
+    app.setOrganizationName("KnotzFLix Team")
+    
+    # Show splash screen
+    splash = KnotzFlixSplash()
+    splash.show()
+    
+    # Initialize application with progress updates
+    splash.showMessage("Initializing application...", 10)
+    time.sleep(0.1)  # Small delay to show splash
+    
+    splash.showMessage("Loading configuration...", 30)
+    QApplication.processEvents()
+    
+    splash.showMessage("Setting up database...", 50)
+    QApplication.processEvents()
+    
+    splash.showMessage("Creating main window...", 70)
+    QApplication.processEvents()
+    
+    # Create main window
     win = create_main_window()
+    
+    splash.showMessage("Starting IPC server...", 90)
+    QApplication.processEvents()
+    
     # Start focus IPC server to bring window to front on subsequent launches
     try:
         server = ipc_focus.start_server(lambda: _focus_window(win))
@@ -42,8 +71,52 @@ def _run_qt() -> int:
         app.aboutToQuit.connect(lambda: server.stop())  # type: ignore[attr-defined]
     except Exception:
         pass
-    win.show()
+    
+    splash.showMessage("Ready!", 100)
+    QApplication.processEvents()
+    
+    # Show main window and close splash after a brief moment
+    def show_main_window():
+        splash.close()
+        win.show()
+        
+        # Show welcome dialog for first-time users
+        _show_welcome_if_needed(win)
+    
+    # Delay to ensure splash is visible for at least a moment
+    QTimer.singleShot(500, show_main_window)
+    
     return app.exec()
+
+
+def _show_welcome_if_needed(win) -> None:
+    """Show welcome dialog for first-time users."""
+    try:
+        from infra.config import load_config
+        from ui.widgets.welcome_dialog import WelcomeDialog
+        
+        config = load_config()
+        
+        # Show welcome if no library roots are configured and user hasn't disabled it
+        if not config.library_roots and not getattr(config, 'hide_welcome', False):
+            welcome = WelcomeDialog(win)
+            
+            # Connect signals to main window methods
+            if hasattr(win, 'add_folder_from_welcome'):
+                welcome.folder_added.connect(win.add_folder_from_welcome)
+            if hasattr(win, 'start_initial_scan'):
+                welcome.start_scan.connect(win.start_initial_scan)
+                
+            result = welcome.exec()
+            
+            # Save preference if user chose not to show again
+            if not welcome.should_show_again():
+                config.hide_welcome = True
+                from infra.config import save_config
+                save_config(config)
+                
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Error showing welcome dialog: {e}")
 
 
 def _focus_window(win) -> None:

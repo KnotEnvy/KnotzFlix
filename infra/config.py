@@ -27,6 +27,8 @@ class AppConfig:
     private_code_hash: str | None = None
     # Salt for password hashing (32 bytes, hex encoded)
     private_salt: str | None = None
+    # Hide welcome dialog on startup
+    hide_welcome: bool = False
     concurrency: int = max(os.cpu_count() or 2, 2)
     ignore_rules: list[str] = field(
         default_factory=lambda: [

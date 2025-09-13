@@ -107,25 +107,34 @@ def create_main_window() -> "QMainWindow":
             from ui.views.poster_grid import PosterGrid
 
             self.tabs = QTabWidget()
+            
             # Library tab
             self.grid = PosterGrid(self.db)
-            self.tabs.addTab(self.grid, "Library")
+            lib_index = self.tabs.addTab(self.grid, "Library")
+            self.tabs.setTabToolTip(lib_index, "Browse all movies in your collection")
+            
             # Recently Added tab
             self.recent = PosterGrid(self.db, order_mode="recent")
-            self.tabs.addTab(self.recent, "Recently Added")
+            recent_index = self.tabs.addTab(self.recent, "Recently Added")
+            self.tabs.setTabToolTip(recent_index, "Movies added to your library recently")
+            
             # By Folder tab
             self.by_folder = ByFolderView(self.db, self.cfg.library_roots[:])
-            self.tabs.addTab(self.by_folder, "By Folder")
+            folder_index = self.tabs.addTab(self.by_folder, "By Folder")
+            self.tabs.setTabToolTip(folder_index, "Browse movies organized by their source folders")
+            
             # Continue Watching tab
             from PyQt6.QtWidgets import QWidget
             self.continue_grid = PosterGrid(self.db, order_mode="default", id_allowlist=self.db.get_continue_watching_ids())
-            self.tabs.addTab(self.continue_grid, "Continue Watching")
+            continue_index = self.tabs.addTab(self.continue_grid, "Continue Watching")
+            self.tabs.setTabToolTip(continue_index, "Movies you've started watching but haven't finished")
 
             # Private tab (locked by default)
             self._private_unlocked: bool = False
             self._private_ids: list[int] = []
             self.private_grid = PosterGrid(self.db, order_mode="default", id_allowlist=[])
             self._private_tab_index = self.tabs.addTab(self.private_grid, "Private")
+            self.tabs.setTabToolTip(self._private_tab_index, "Password-protected movies (unlock in Settings to view)")
 
             # Keep Continue Watching shelf fresh when a movie is played
             def _update_continue_shelf(_mid: int) -> None:
@@ -145,25 +154,60 @@ def create_main_window() -> "QMainWindow":
 
             # Settings tab
             self.roots_list = QListWidget()
+            self.roots_list.setToolTip("List of folders being monitored for movies. Select a folder to perform actions.")
             self._refresh_roots()
-            add_btn = QPushButton("Add Folder…"); add_btn.clicked.connect(self.add_folder)
-            add_priv_btn = QPushButton("Add Private Folder…"); add_priv_btn.clicked.connect(self.add_private_folder)
-            remove_btn = QPushButton("Remove Selected"); remove_btn.clicked.connect(self.remove_selected_root)
-            mark_priv_btn = QPushButton("Mark Selected Private"); mark_priv_btn.clicked.connect(self.mark_selected_private)
-            mark_pub_btn = QPushButton("Mark Selected Public"); mark_pub_btn.clicked.connect(self.mark_selected_public)
-            rescan_btn = QPushButton("Rescan All"); rescan_btn.clicked.connect(self.rescan)
-            rescan_sel_btn = QPushButton("Rescan Selected"); rescan_sel_btn.clicked.connect(self.rescan_selected)
-            validate_btn = QPushButton("Validate Posters"); validate_btn.clicked.connect(self.validate_posters)
+            
+            # Add tooltips to all buttons for better UX
+            add_btn = QPushButton("Add Folder…")
+            add_btn.clicked.connect(self.add_folder)
+            add_btn.setToolTip("Add a new folder to scan for movies (Ctrl+O)")
+            
+            add_priv_btn = QPushButton("Add Private Folder…")
+            add_priv_btn.clicked.connect(self.add_private_folder)
+            add_priv_btn.setToolTip("Add a folder that will be hidden in Private mode")
+            
+            remove_btn = QPushButton("Remove Selected")
+            remove_btn.clicked.connect(self.remove_selected_root)
+            remove_btn.setToolTip("Remove the selected folder from monitoring")
+            
+            mark_priv_btn = QPushButton("Mark Selected Private")
+            mark_priv_btn.clicked.connect(self.mark_selected_private)
+            mark_priv_btn.setToolTip("Hide movies in this folder behind private access")
+            
+            mark_pub_btn = QPushButton("Mark Selected Public")
+            mark_pub_btn.clicked.connect(self.mark_selected_public)
+            mark_pub_btn.setToolTip("Make movies in this folder visible to everyone")
+            
+            rescan_btn = QPushButton("Rescan All")
+            rescan_btn.clicked.connect(self.rescan)
+            rescan_btn.setToolTip("Scan all folders for new, moved, or deleted movies (F5)")
+            
+            rescan_sel_btn = QPushButton("Rescan Selected")
+            rescan_sel_btn.clicked.connect(self.rescan_selected)
+            rescan_sel_btn.setToolTip("Scan only the selected folder for changes")
+            
+            validate_btn = QPushButton("Validate Posters")
+            validate_btn.clicked.connect(self.validate_posters)
+            validate_btn.setToolTip("Regenerate missing or placeholder movie posters (requires FFmpeg)")
 
             # Status row (ffmpeg)
             from PyQt6.QtWidgets import QLabel
             self.ffmpeg_lbl = QLabel()
+            self.ffmpeg_lbl.setToolTip("FFmpeg status - required for generating movie posters from video frames")
             self._refresh_ffmpeg_status()
 
             # Private access controls
-            set_code_btn = QPushButton("Set Private Code…"); set_code_btn.clicked.connect(self.set_private_code)
-            unlock_btn = QPushButton("Unlock Private…"); unlock_btn.clicked.connect(self.unlock_private)
-            lock_btn = QPushButton("Lock Private"); lock_btn.clicked.connect(self.lock_private)
+            set_code_btn = QPushButton("Set Private Code…")
+            set_code_btn.clicked.connect(self.set_private_code)
+            set_code_btn.setToolTip("Create or change the password for private library access")
+            
+            unlock_btn = QPushButton("Unlock Private…")
+            unlock_btn.clicked.connect(self.unlock_private)
+            unlock_btn.setToolTip("Enter password to access private movies")
+            
+            lock_btn = QPushButton("Lock Private")
+            lock_btn.clicked.connect(self.lock_private)
+            lock_btn.setToolTip("Hide private movies and lock private access")
 
             btn_row = QHBoxLayout()
             btn_row.addWidget(add_btn); btn_row.addWidget(add_priv_btn); btn_row.addWidget(remove_btn)
@@ -174,9 +218,13 @@ def create_main_window() -> "QMainWindow":
 
             settings_layout = QVBoxLayout(); settings_layout.addWidget(self.roots_list); settings_layout.addLayout(btn_row); settings_layout.addLayout(priv_row); settings_layout.addLayout(status_row)
             settings_page = QWidget(); settings_page.setLayout(settings_layout)
-            self.tabs.addTab(settings_page, "Settings")
+            settings_index = self.tabs.addTab(settings_page, "Settings")
+            self.tabs.setTabToolTip(settings_index, "Configure folders, scanning, and private access")
 
             self.setCentralWidget(self.tabs)
+
+            # Create menu bar
+            self._create_menu_bar()
 
             sb = QStatusBar(); self.setStatusBar(sb)
             self.progress = QProgressBar(); self.progress.setRange(0, 100)
@@ -214,6 +262,154 @@ def create_main_window() -> "QMainWindow":
             # Initialize private filters and tab state
             self._refresh_private_filters()
 
+        def _create_menu_bar(self) -> None:
+            """Create menu bar with keyboard shortcuts."""
+            from PyQt6.QtGui import QAction, QKeySequence
+            from PyQt6.QtWidgets import QMenuBar
+            
+            menubar = self.menuBar()
+            
+            # File menu
+            file_menu = menubar.addMenu("&File")
+            
+            # Add folder action
+            add_folder_action = QAction("&Add Folder...", self)
+            add_folder_action.setShortcut(QKeySequence("Ctrl+O"))
+            add_folder_action.triggered.connect(self.add_folder)
+            file_menu.addAction(add_folder_action)
+            
+            file_menu.addSeparator()
+            
+            # Rescan actions
+            rescan_action = QAction("&Rescan All", self)
+            rescan_action.setShortcut(QKeySequence("F5"))
+            rescan_action.triggered.connect(self.rescan)
+            file_menu.addAction(rescan_action)
+            
+            file_menu.addSeparator()
+            
+            # Exit action
+            exit_action = QAction("E&xit", self)
+            exit_action.setShortcut(QKeySequence("Ctrl+Q"))
+            exit_action.triggered.connect(self.close)
+            file_menu.addAction(exit_action)
+            
+            # View menu
+            view_menu = menubar.addMenu("&View")
+            
+            # Refresh action
+            refresh_action = QAction("&Refresh", self)
+            refresh_action.setShortcut(QKeySequence("F5"))
+            refresh_action.triggered.connect(self._refresh_current_view)
+            view_menu.addAction(refresh_action)
+            
+            view_menu.addSeparator()
+            
+            # Go to tabs
+            library_action = QAction("&Library", self)
+            library_action.setShortcut(QKeySequence("Ctrl+1"))
+            library_action.triggered.connect(lambda: self.tabs.setCurrentIndex(0))
+            view_menu.addAction(library_action)
+            
+            recent_action = QAction("&Recently Added", self)
+            recent_action.setShortcut(QKeySequence("Ctrl+2"))
+            recent_action.triggered.connect(lambda: self.tabs.setCurrentIndex(1))
+            view_menu.addAction(recent_action)
+            
+            folder_action = QAction("By &Folder", self)
+            folder_action.setShortcut(QKeySequence("Ctrl+3"))
+            folder_action.triggered.connect(lambda: self.tabs.setCurrentIndex(2))
+            view_menu.addAction(folder_action)
+            
+            continue_action = QAction("&Continue Watching", self)
+            continue_action.setShortcut(QKeySequence("Ctrl+4"))
+            continue_action.triggered.connect(lambda: self.tabs.setCurrentIndex(3))
+            view_menu.addAction(continue_action)
+            
+            # Help menu
+            help_menu = menubar.addMenu("&Help")
+            
+            # Keyboard shortcuts
+            shortcuts_action = QAction("&Keyboard Shortcuts", self)
+            shortcuts_action.setShortcut(QKeySequence("F1"))
+            shortcuts_action.triggered.connect(self._show_help_dialog)
+            help_menu.addAction(shortcuts_action)
+            
+            # Welcome dialog
+            welcome_action = QAction("&Welcome Guide", self)
+            welcome_action.triggered.connect(self._show_welcome_dialog)
+            help_menu.addAction(welcome_action)
+            
+            help_menu.addSeparator()
+            
+            # About dialog
+            about_action = QAction("&About KnotzFLix", self)
+            about_action.triggered.connect(self._show_about_dialog)
+            help_menu.addAction(about_action)
+
+        def _refresh_current_view(self) -> None:
+            """Refresh the currently active view."""
+            try:
+                current_index = self.tabs.currentIndex()
+                if current_index == 0:  # Library
+                    self.grid.refresh()
+                elif current_index == 1:  # Recently Added
+                    self.recent.refresh()
+                elif current_index == 2:  # By Folder
+                    self.by_folder.grid.refresh()
+                elif current_index == 3:  # Continue Watching
+                    ids = self.db.get_continue_watching_ids()
+                    self.continue_grid.model.set_id_allowlist(ids)
+                    self.continue_grid.refresh()
+                elif current_index == 4:  # Private
+                    self.private_grid.refresh()
+            except Exception:
+                pass
+
+        def _show_help_dialog(self) -> None:
+            """Show keyboard shortcuts and help dialog."""
+            try:
+                from ui.widgets.help_dialog import HelpDialog
+                dialog = HelpDialog(self)
+                dialog.exec()
+            except Exception:
+                pass
+
+        def _show_about_dialog(self) -> None:
+            """Show about dialog with credits and version info."""
+            try:
+                from ui.widgets.about_dialog import AboutDialog
+                dialog = AboutDialog(self)
+                dialog.exec()
+            except Exception:
+                pass
+
+        def _show_welcome_dialog(self) -> None:
+            """Show welcome dialog manually."""
+            try:
+                from ui.widgets.welcome_dialog import WelcomeDialog
+                dialog = WelcomeDialog(self)
+                
+                # Connect signals
+                dialog.folder_added.connect(self.add_folder_from_welcome)
+                dialog.start_scan.connect(self.start_initial_scan)
+                
+                dialog.exec()
+            except Exception:
+                pass
+
+        def add_folder_from_welcome(self, folder: str) -> None:
+            """Add folder from welcome dialog."""
+            if folder not in self.cfg.library_roots:
+                self.cfg.library_roots.append(folder)
+                save_config(self.cfg)
+                self._refresh_roots()
+
+        def start_initial_scan(self) -> None:
+            """Start initial scan from welcome dialog."""
+            if self.cfg.library_roots:
+                self.rescan()
+
         def _refresh_roots(self) -> None:
             self.roots_list.clear()
             for r in self.cfg.library_roots:
@@ -241,8 +437,9 @@ def create_main_window() -> "QMainWindow":
                 self.cfg.library_roots.append(folder)
                 save_config(self.cfg)
                 self._refresh_roots()
+                self.statusBar().showMessage(f"✓ Added folder: {folder}", 3000)
             else:
-                QMessageBox.information(self, "KnotzFLix", "Folder already added.")
+                QMessageBox.information(self, "KnotzFLix", "This folder is already being monitored.")
 
         def add_private_folder(self) -> None:
             folder = QFileDialog.getExistingDirectory(self, "Select Private Folder")
@@ -325,10 +522,15 @@ def create_main_window() -> "QMainWindow":
             self.progress.setValue(val)
 
         def _on_scan_finished(self, summary) -> None:
-            self.statusBar().showMessage(
-                f"Scanned {summary.total_files} files | New movies: {summary.new_movies} | New files: {summary.new_files} | Duplicates: {summary.duplicates}",
-                5000,
-            )
+            # Enhanced status message with more context
+            if summary.new_movies == 0 and summary.new_files == 0:
+                status_msg = f"✓ Scan complete - Library up to date ({summary.total_files} files checked)"
+            else:
+                status_msg = f"✓ Scan complete - Added {summary.new_movies} movies, {summary.new_files} files from {summary.total_files} scanned"
+                if summary.duplicates > 0:
+                    status_msg += f" | Found {summary.duplicates} duplicates"
+            
+            self.statusBar().showMessage(status_msg, 8000)
             self.progress.setVisible(False)
             # Refresh library grid
             try:
