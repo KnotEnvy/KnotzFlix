@@ -1,28 +1,27 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
-from infra import library_service
+from infra import library_service, thumbnails
+from infra import watcher as fs_watcher
 from infra.config import AppConfig, load_config, save_config
 from infra.db import Database
-from infra import watcher as fs_watcher
-from infra import thumbnails
 
 
 def _qt_imports():
-    from PyQt6.QtCore import Qt, QObject, QThread, pyqtSignal
+    from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
     from PyQt6.QtWidgets import (
-        QMainWindow,
-        QWidget,
-        QVBoxLayout,
+        QFileDialog,
         QHBoxLayout,
         QListWidget,
-        QPushButton,
-        QFileDialog,
-        QStatusBar,
-        QProgressBar,
+        QMainWindow,
         QMessageBox,
+        QProgressBar,
+        QPushButton,
+        QStatusBar,
+        QVBoxLayout,
+        QWidget,
     )
     return Qt, QObject, QThread, pyqtSignal, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton, QFileDialog, QStatusBar, QProgressBar, QMessageBox
 
@@ -103,8 +102,9 @@ def create_main_window() -> "QMainWindow":
 
             # Tabs: Library + Recently Added + By Folder + Private + Settings
             from PyQt6.QtWidgets import QTabWidget
-            from ui.views.poster_grid import PosterGrid
+
             from ui.views.by_folder import ByFolderView
+            from ui.views.poster_grid import PosterGrid
 
             self.tabs = QTabWidget()
             # Library tab
@@ -165,7 +165,7 @@ def create_main_window() -> "QMainWindow":
             unlock_btn = QPushButton("Unlock Private…"); unlock_btn.clicked.connect(self.unlock_private)
             lock_btn = QPushButton("Lock Private"); lock_btn.clicked.connect(self.lock_private)
 
-            btn_row = QHBoxLayout();
+            btn_row = QHBoxLayout()
             btn_row.addWidget(add_btn); btn_row.addWidget(add_priv_btn); btn_row.addWidget(remove_btn)
             btn_row.addWidget(mark_priv_btn); btn_row.addWidget(mark_pub_btn)
             btn_row.addWidget(rescan_btn); btn_row.addWidget(rescan_sel_btn); btn_row.addWidget(validate_btn); btn_row.addStretch(1)
@@ -528,7 +528,7 @@ def create_main_window() -> "QMainWindow":
 
     # Poster fixer worker
     def _make_poster_fix_worker_class():
-        from PyQt6.QtCore import QThread, QObject, pyqtSignal
+        from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
         class _Signals(QObject):
             progress = pyqtSignal(int, int)
@@ -540,9 +540,10 @@ def create_main_window() -> "QMainWindow":
                 self.signals = _Signals()
 
             def run(self) -> None:
-                from infra.db import Database
-                from infra import thumbnails, fingerprinter
                 from pathlib import Path as _P
+
+                from infra import fingerprinter, thumbnails
+                from infra.db import Database
 
                 db = Database()
                 try:

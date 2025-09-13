@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Optional, Tuple
 
-
 YEAR_RE = re.compile(r"(?<!\d)((19|20)\d{2})(?!\d)")
 
 

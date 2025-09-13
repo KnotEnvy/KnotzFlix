@@ -1,10 +1,9 @@
-import os
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from infra import scanner, parser
+from infra import parser, scanner
 
 
 class TestScannerParser(unittest.TestCase):

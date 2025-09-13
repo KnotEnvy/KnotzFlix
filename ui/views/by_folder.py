@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional
-
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QListWidget, QListWidgetItem, QSplitter
+from PyQt6.QtWidgets import QHBoxLayout, QListWidget, QSplitter, QWidget
 
 from infra.db import Database
 from ui.views.poster_grid import PosterGrid

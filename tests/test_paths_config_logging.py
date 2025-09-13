@@ -5,8 +5,7 @@ import unittest
 from pathlib import Path
 
 from infra import config as cfg
-from infra import logging_config
-from infra import paths
+from infra import logging_config, paths
 
 
 class TestPathsConfigLogging(unittest.TestCase):

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff:*)",
+      "Bash(where pyinstaller)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

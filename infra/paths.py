@@ -4,7 +4,6 @@ import os
 import sys
 from pathlib import Path
 
-
 APP_DISPLAY_NAME = "KnotzFLix"
 APP_SLUG = "knotzflix"
 ENV_DATA_DIR = "KNOTZFLIX_DATA_DIR"

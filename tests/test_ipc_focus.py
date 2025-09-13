@@ -5,8 +5,7 @@ import time
 import unittest
 from pathlib import Path
 
-from infra import ipc_focus
-from infra import paths
+from infra import ipc_focus, paths
 
 
 class TestIpcFocus(unittest.TestCase):

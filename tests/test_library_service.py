@@ -4,10 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from infra import library_service
-from infra import paths
+from infra import library_service, paths
 from infra.db import Database
-from infra import db as dbmod
 
 
 class TestLibraryService(unittest.TestCase):
@@ -92,7 +90,7 @@ class TestLibraryService(unittest.TestCase):
         first = self.lib / "MovieC.2022.mkv"
         first.write_bytes(b"Z" * 4096)
 
-        summary = library_service.scan_and_index(
+        library_service.scan_and_index(
             db=self.db,
             roots=[self.lib],
             ignore_rules=[],
@@ -117,7 +115,7 @@ class TestLibraryService(unittest.TestCase):
         # Rename the file on disk; scan again and expect relink (no duplicate row)
         renamed = self.lib / "MovieC.2022.RENAMED.mkv"
         first.rename(renamed)
-        summary2 = library_service.scan_and_index(
+        library_service.scan_and_index(
             db=self.db,
             roots=[self.lib],
             ignore_rules=[],

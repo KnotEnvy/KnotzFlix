@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
 from typing import Iterator, Optional
 
-from domain.models import Movie, MediaFile, Image, PlayState
-from .paths import get_db_path, ensure_app_dirs
+from domain.models import Image, MediaFile, Movie, PlayState
 
+from .paths import ensure_app_dirs, get_db_path
 
 CURRENT_SCHEMA_VERSION = 3
 

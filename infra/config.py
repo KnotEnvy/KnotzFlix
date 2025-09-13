@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .paths import ensure_app_dirs
-
 
 SETTINGS_FILE = "settings.json"
 

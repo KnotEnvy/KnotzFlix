@@ -15,7 +15,6 @@ class TestPosterScoringGolden(unittest.TestCase):
 
     def test_score_timestamp_deterministic_with_mocked_stats(self):
         # Monkeypatch the internal ffmpeg stats function
-        called = {}
 
         def fake_stats(_media_path, ts_sec: float, *, filter_chain: str):
             # Base stats: mid brightness around 128, dynamic range varies with ts

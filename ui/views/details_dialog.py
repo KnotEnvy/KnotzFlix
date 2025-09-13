@@ -3,21 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QLabel,
-    QVBoxLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
-from infra.db import Database
 from domain.models import Image
 from infra import playback
+from infra.db import Database
 
 
 class DetailsDialog(QDialog):

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from domain.models import Movie, MediaFile, Image, PlayState
+from domain.models import Image, MediaFile, Movie, PlayState
 from infra import db as dbmod
 from infra import paths
 

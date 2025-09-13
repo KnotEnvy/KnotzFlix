@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from infra.ffprobe import parse_ffprobe_json, MediaInfo
+from infra.ffprobe import MediaInfo, parse_ffprobe_json
 
 
 class TestFFProbe(unittest.TestCase):

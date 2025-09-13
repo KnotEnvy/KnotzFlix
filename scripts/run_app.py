@@ -1,10 +1,10 @@
-from pathlib import Path
-import sys
-import os
-import time
 import argparse
+import os
 import signal
 import subprocess
+import sys
+import time
+from pathlib import Path
 from typing import Optional
 
 repo_root = Path(__file__).resolve().parents[1]
@@ -15,8 +15,8 @@ _bin = repo_root / "bin"
 if _bin.is_dir():
     os.environ["PATH"] = str(_bin) + os.pathsep + os.environ.get("PATH", "")
 
-from infra.single_instance import SingleInstance  # type: ignore
 from infra import ipc_focus  # type: ignore
+from infra.single_instance import SingleInstance  # type: ignore
 from ui.app import run  # type: ignore
 
 

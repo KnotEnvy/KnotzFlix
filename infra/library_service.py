@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from domain.models import MediaFile, Movie, Image
-from . import scanner, parser, fingerprinter
+from domain.models import Image, MediaFile, Movie
+
+from . import fingerprinter, parser, scanner, thumbnails
 from .db import Database
-from . import thumbnails
 
 
 @dataclass

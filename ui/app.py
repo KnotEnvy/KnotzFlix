@@ -3,16 +3,15 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 # Ensure project root is on sys.path when running as a script
 _project_root = str(Path(__file__).resolve().parents[1])
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from infra import ipc_focus
 from infra.logging_config import setup_logging
 from infra.single_instance import SingleInstance, SingleInstanceError
-from infra import ipc_focus
 
 
 def run() -> int:
@@ -31,6 +30,7 @@ def run() -> int:
 
 def _run_qt() -> int:
     from PyQt6.QtWidgets import QApplication
+
     from ui.main_window import create_main_window
 
     app = QApplication([])

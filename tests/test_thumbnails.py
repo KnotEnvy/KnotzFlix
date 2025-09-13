@@ -4,8 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from infra import thumbnails
-from infra import paths
+from infra import paths, thumbnails
 
 
 class TestThumbnails(unittest.TestCase):

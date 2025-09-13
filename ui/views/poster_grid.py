@@ -1,14 +1,24 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, QSize, QRect, QPoint, pyqtSignal
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFontMetrics, QPixmap
-from PyQt6.QtWidgets import QListView, QWidget, QVBoxLayout, QStyledItemDelegate, QStyleOptionViewItem, QStyle, QLineEdit, QMenu, QMessageBox, QFileDialog
+from PyQt6.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor, QFontMetrics, QPainter, QPen, QPixmap
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QLineEdit,
+    QListView,
+    QMenu,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QVBoxLayout,
+    QWidget,
+)
 
-from infra.db import Database
 from domain.models import PlayState
+from infra import playback
+from infra.db import Database
 from ui.models.movie_list_model import MovieListModel, Roles
 from ui.views.details_dialog import DetailsDialog
-from infra import playback
 from ui.widgets.toast import show_toast
 
 
@@ -84,7 +94,6 @@ class PosterTileDelegate(QStyledItemDelegate):
             painter.drawRoundedRect(poster_rect, radius, radius)
             # Simple centered label
             painter.setPen(QColor(200, 200, 200))
-            from PyQt6.QtGui import QFont
             f = painter.font()
             f.setPointSizeF(max(9.0, f.pointSizeF()))
             painter.setFont(f)
@@ -143,15 +152,14 @@ class PosterTileDelegate(QStyledItemDelegate):
                 painter.drawRoundedRect(QRect(bx, by, fill_w, bar_h), 4, 4)
             # percent text
             painter.setPen(QColor(255, 255, 255))
-            from PyQt6.QtGui import QFont
             f = painter.font()
             f.setPointSizeF(max(7.0, f.pointSizeF() - 1))
             painter.setFont(f)
             t = f"{progress}%"
             fm2 = QFontMetrics(f)
             tw2 = fm2.horizontalAdvance(t)
-            tx2 = bx + (bar_w - tw2) // 2
-            ty2 = by + bar_h - 1
+            bx + (bar_w - tw2) // 2
+            by + bar_h - 1
             painter.drawText(QRect(bx, by - 6, bar_w, bar_h + 12), Qt.AlignmentFlag.AlignCenter, t)
 
         # Corner badges: watched (top-left) and private lock (top-right)
@@ -165,7 +173,6 @@ class PosterTileDelegate(QStyledItemDelegate):
             is_priv = False
 
         if watched:
-            from PyQt6.QtGui import QFont
             r = QRect(poster_rect.left() + 6, poster_rect.top() + 6, 22, 22)
             painter.setBrush(QColor(46, 204, 113))
             painter.setPen(Qt.PenStyle.NoPen)
@@ -298,7 +305,7 @@ class PosterGrid(QWidget):
         self.setLayout(lay)
 
         # Shortcuts: P to Play, R to Reveal
-        from PyQt6.QtGui import QShortcut, QKeySequence
+        from PyQt6.QtGui import QKeySequence, QShortcut
         QShortcut(QKeySequence("P"), self.view, activated=self._play)
         QShortcut(QKeySequence("R"), self.view, activated=self._open_containing)
         # Mark watched/unwatched
@@ -318,7 +325,6 @@ class PosterGrid(QWidget):
         viewport_w = max(1, self.view.viewport().width())
         spacing = self.view.spacing()
         # Aim for tile width around 200 but fit whole columns
-        target = 200
         # Columns: try to maximize while keeping >= 140px tiles
         for cols in range(12, 0, -1):
             total_spacing = spacing * (cols + 1)

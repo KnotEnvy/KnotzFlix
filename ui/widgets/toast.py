@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QTimer, QEasingCurve, QRect
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer
 from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import QLabel, QWidget
-from PyQt6.QtCore import QPropertyAnimation
 
 
 class Toast(QLabel):

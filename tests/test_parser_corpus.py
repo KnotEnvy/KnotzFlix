@@ -1,6 +1,6 @@
 import unittest
-from infra import parser
 
+from infra import parser
 
 CASES = [
     ("The.Matrix.1999.1080p.mkv", ("The Matrix", 1999)),

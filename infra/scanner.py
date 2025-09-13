@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".m4v", ".wmv"}
 
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from logging.handlers import RotatingFileHandler
 
-from .paths import get_log_path, ensure_app_dirs
+from .paths import ensure_app_dirs, get_log_path
 
 
 def setup_logging(level: int = logging.INFO) -> None:

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import shutil
-import subprocess
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional, Tuple
-
-from .cache import content_addressed_path
-from .exec_paths import get_ffmpeg_exe
 import hashlib
 import random
 import re
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
 
+from .cache import content_addressed_path
+from .exec_paths import get_ffmpeg_exe
 
 # Valid 1x1 PNG bytes (RGBA), reliably loadable by Qt.
 PLACEHOLDER_PNG = bytes(

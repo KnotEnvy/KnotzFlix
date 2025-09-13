@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -69,5 +68,4 @@ def probe(path: Path, timeout_sec: int = 10) -> Optional[MediaInfo]:
         data = json.loads(result.stdout)
         return parse_ffprobe_json(data)
     except Exception:
-        from .exec_paths import get_ffprobe_exe
         return None

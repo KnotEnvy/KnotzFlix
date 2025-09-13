@@ -18,8 +18,8 @@ def start_watchers(roots: list[Path], on_change: Callable[[Path], None]) -> Opti
     retain any polling mechanism (e.g., QTimer).
     """
     try:
-        from watchdog.observers import Observer  # type: ignore
         from watchdog.events import FileSystemEventHandler  # type: ignore
+        from watchdog.observers import Observer  # type: ignore
     except Exception:
         return None
 
