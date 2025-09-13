@@ -184,6 +184,18 @@ def _score_timestamp(media_path: Path, ts_sec: float) -> Optional[float]:
 
 
 def build_ffmpeg_cmd(input_path: Path, out_path: Path, ts_sec: float, height: int, quality: int) -> list[str]:
+    # SECURITY: Validate parameters to prevent command injection
+    if not input_path.exists() or not input_path.is_file():
+        raise ValueError(f"Invalid input path: {input_path}")
+    
+    # Validate height parameter (reasonable bounds)
+    if not isinstance(height, int) or height < 50 or height > 2160:
+        raise ValueError(f"Invalid height: {height}")
+    
+    # Validate timestamp
+    if not isinstance(ts_sec, (int, float)) or ts_sec < 0 or ts_sec > 86400:  # Max 24 hours
+        raise ValueError(f"Invalid timestamp: {ts_sec}")
+    
     # Ensure even dimensions for codecs
     vf = f"scale=-2:{height}"
     return [
@@ -204,6 +216,14 @@ def build_ffmpeg_cmd(input_path: Path, out_path: Path, ts_sec: float, height: in
 
 
 def build_ffmpeg_cmd_thumbnail(input_path: Path, out_path: Path, height: int, quality: int) -> list[str]:
+    # SECURITY: Validate parameters to prevent command injection
+    if not input_path.exists() or not input_path.is_file():
+        raise ValueError(f"Invalid input path: {input_path}")
+    
+    # Validate height parameter (reasonable bounds)
+    if not isinstance(height, int) or height < 50 or height > 2160:
+        raise ValueError(f"Invalid height: {height}")
+    
     # Use ffmpeg's thumbnail filter to pick a representative frame automatically.
     vf = f"thumbnail,scale=-2:{height}"
     return [

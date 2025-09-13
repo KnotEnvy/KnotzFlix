@@ -353,19 +353,38 @@ def create_main_window() -> "QMainWindow":
         # Private helpers
         def _hash_private_code(self, code: str) -> str:
             import hashlib
-            # Use a short person string (<=16 bytes) for domain separation
-            h = hashlib.blake2b(code.encode("utf-8"), digest_size=32, person=b"knotzflix-priv")
-            return h.hexdigest()
+            import os
+            
+            # SECURITY FIX: Use PBKDF2 for proper password hashing
+            # Generate salt if not present in config
+            if not hasattr(self.cfg, 'private_salt') or not self.cfg.private_salt:
+                self.cfg.private_salt = os.urandom(32).hex()
+            
+            salt = bytes.fromhex(self.cfg.private_salt)
+            # Use PBKDF2 with 100,000 iterations (OWASP recommended minimum)
+            hash_bytes = hashlib.pbkdf2_hmac('sha256', code.encode('utf-8'), salt, 100000)
+            return hash_bytes.hex()
 
         def set_private_code(self) -> None:
             from PyQt6.QtWidgets import QInputDialog
-            code, ok = QInputDialog.getText(self, "Set Private Code", "Enter new code:")
+            
+            # SECURITY: Use password input dialog for better security
+            code, ok = QInputDialog.getText(self, "Set Private Code", "Enter new code (min 8 chars):", 
+                                          text="", echo=QInputDialog.EchoMode.Password)
             if not ok or not code:
                 return
-            code2, ok2 = QInputDialog.getText(self, "Confirm Private Code", "Re-enter code:")
+                
+            # SECURITY: Enforce minimum password requirements
+            if len(code) < 8:
+                QMessageBox.warning(self, "KnotzFLix", "Password must be at least 8 characters long.")
+                return
+                
+            code2, ok2 = QInputDialog.getText(self, "Confirm Private Code", "Re-enter code:", 
+                                            text="", echo=QInputDialog.EchoMode.Password)
             if not ok2 or code2 != code:
                 QMessageBox.warning(self, "KnotzFLix", "Codes do not match.")
                 return
+                
             self.cfg.private_code_hash = self._hash_private_code(code)
             save_config(self.cfg)
             QMessageBox.information(self, "KnotzFLix", "Private code updated.")
@@ -375,14 +394,33 @@ def create_main_window() -> "QMainWindow":
                 QMessageBox.information(self, "KnotzFLix", "Set a private code first.")
                 return
             from PyQt6.QtWidgets import QInputDialog
-            code, ok = QInputDialog.getText(self, "Unlock Private", "Enter private code:")
+            
+            # SECURITY: Use password input dialog
+            code, ok = QInputDialog.getText(self, "Unlock Private", "Enter private code:", 
+                                          text="", echo=QInputDialog.EchoMode.Password)
             if not ok:
                 return
+                
+            # Add basic rate limiting - simple implementation
+            if not hasattr(self, '_unlock_attempts'):
+                self._unlock_attempts = 0
+                self._last_attempt_time = 0
+                
+            import time
+            current_time = time.time()
+            if current_time - self._last_attempt_time < 2:  # 2 second minimum between attempts
+                QMessageBox.warning(self, "KnotzFLix", "Please wait before trying again.")
+                return
+                
+            self._last_attempt_time = current_time
+            
             if self._hash_private_code(code) == self.cfg.private_code_hash:
                 self._private_unlocked = True
+                self._unlock_attempts = 0
                 self._refresh_private_filters()
                 QMessageBox.information(self, "KnotzFLix", "Private unlocked.")
             else:
+                self._unlock_attempts += 1
                 QMessageBox.warning(self, "KnotzFLix", "Incorrect code.")
 
         def lock_private(self) -> None:

@@ -23,8 +23,10 @@ class AppConfig:
     library_roots: list[str] = field(default_factory=list)
     # Folders whose contents are hidden from the main Library unless unlocked
     private_roots: list[str] = field(default_factory=list)
-    # Blake2b hex digest of the private access code (optional)
+    # PBKDF2 hex digest of the private access code (optional)
     private_code_hash: str | None = None
+    # Salt for password hashing (32 bytes, hex encoded)
+    private_salt: str | None = None
     concurrency: int = max(os.cpu_count() or 2, 2)
     ignore_rules: list[str] = field(
         default_factory=lambda: [
