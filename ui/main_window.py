@@ -408,16 +408,28 @@ def create_main_window() -> "QMainWindow":
                 self.private_grid.model.set_id_allowlist(self._private_ids)
             else:
                 self.private_grid.model.set_id_allowlist([])
+            try:
+                self.private_grid.model.set_private_ids(self._private_ids)
+            except Exception:
+                pass
             self.private_grid.refresh()
             # Exclude private ids from main grids when locked
             exclude = [] if self._private_unlocked else self._private_ids
             try:
                 self.grid.model.set_id_blocklist(exclude)
+                try:
+                    self.grid.model.set_private_ids(self._private_ids)
+                except Exception:
+                    pass
                 self.grid.refresh()
             except Exception:
                 pass
             try:
                 self.recent.model.set_id_blocklist(exclude)
+                try:
+                    self.recent.model.set_private_ids(self._private_ids)
+                except Exception:
+                    pass
                 self.recent.refresh()
             except Exception:
                 pass
@@ -439,6 +451,13 @@ def create_main_window() -> "QMainWindow":
                         self._watch_handles.stop()
                     except Exception:
                         pass
+                # Avoid destroying a running poster validation thread
+                try:
+                    th = getattr(self, "_poster_fix_thread", None)
+                    if th is not None and th.isRunning():
+                        th.wait(2000)
+                except Exception:
+                    pass
                 self.db.close()
             finally:
                 super().closeEvent(event)
@@ -475,10 +494,35 @@ def create_main_window() -> "QMainWindow":
             # Kick off background validator
             PosterFixWorker = _make_poster_fix_worker_class()
             worker = PosterFixWorker()
+            # keep reference to avoid premature GC
+            self._poster_fix_thread = worker
             worker.signals.progress.connect(self._on_progress)
-            def _after(_summary: object) -> None:
-                self._on_scan_finished(_summary)
+            def _after(res: object) -> None:
+                try:
+                    total = int(res.get("total", 0)) if isinstance(res, dict) else 0
+                    fixed = int(res.get("fixed", 0)) if isinstance(res, dict) else 0
+                    self.statusBar().showMessage(f"Validated posters: fixed {fixed} of {total}", 5000)
+                except Exception:
+                    pass
+                try:
+                    self.grid.refresh(); self.recent.refresh(); self.by_folder.grid.refresh()
+                except Exception:
+                    pass
+                try:
+                    self.progress.setVisible(False)
+                except Exception:
+                    pass
+                # release thread reference
+                try:
+                    self._poster_fix_thread = None
+                except Exception:
+                    pass
             worker.signals.finished.connect(_after)
+            try:
+                worker.finished.connect(lambda: setattr(self, "_poster_fix_thread", None))
+                worker.finished.connect(worker.deleteLater)
+            except Exception:
+                pass
             self.progress.setVisible(True); self.progress.setValue(0)
             worker.start()
 

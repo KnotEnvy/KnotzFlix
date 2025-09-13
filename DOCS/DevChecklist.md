@@ -41,8 +41,8 @@ This roadmap is iterative. Each task includes acceptance criteria.
 ---
 
 ## Sprint 4 - Posters/Thumbnails (Offline)
-- [ ] Poster pipeline: frame picker with luminance/edge heuristics.  
-  Done when: ≥90% representative posters generated. (Partial: deterministic multi-sample candidates + ffmpeg-based scoring using signalstats/edgedetect integrated; further tuning and golden tests for scoring to follow.)
+- [x] Poster pipeline: frame picker with luminance/edge heuristics.  
+  Done when: ≥90% representative posters generated. (Deterministic candidate selection + ffmpeg signalstats/edgedetect scoring integrated; golden tests cover determinism and scoring helpers.)
 - [x] Cache system (content-addressed, size variants).  
   Done when: cache reused on rescans. (Implemented; verified.)
 - [x] Index titles/tags into FTS5.  
@@ -51,8 +51,8 @@ This roadmap is iterative. Each task includes acceptance criteria.
 ---
 
 ## Sprint 5 - UI: Grid & Navigation
-- [ ] Virtualized poster grid, keyboard navigation, focus ring.  
-  Done when: first render ≤200ms; smooth scroll; Home/End work. (Initial QListView grid present; polish pending.)
+- [x] Virtualized poster grid, keyboard navigation, focus ring.  
+  Done when: first render ≤200ms; smooth scroll; Home/End work. (Batched layout, per-pixel scrolling, type-ahead routes to search, viewport-aware PageUp/PageDown, palette-based focus/selection ring, placeholder-aware painting.)
 - [x] Empty state screens + error toasts.  
   Done when: no crashes on empty library or scan cancel. (Empty state implemented; non-blocking toast widget added and wired in Library actions.)
 
@@ -79,8 +79,8 @@ This roadmap is iterative. Each task includes acceptance criteria.
 ---
 
 ## Sprint 8 - Watcher & Incremental Rescans
-- [ ] Platform FS watcher (inotify/FSEvents/USN) + polling fallback.  
-  Done when: new files appear within seconds. (Partial: QTimer polling watcher added; platform-native watchers pending.)
+- [x] Platform FS watcher (inotify/FSEvents/USN) + polling fallback.  
+  Done when: new files appear within seconds. (Implemented via optional `watchdog`-backed native watchers with per-root debounce; QTimer polling retained as fallback.)
 - [x] Per-root rescans.  
   Done when: scoped rescan runs without touching other roots. (UI button "Rescan Selected" added.)
 
@@ -97,8 +97,8 @@ This roadmap is iterative. Each task includes acceptance criteria.
 ## Sprint 10 - QA & Hardening
 - [ ] Synthetic library generator (1k-10k files).  
   Done when: benchmarks collected; regressions blocked in CI.
-- [ ] Golden poster tests + deterministic seed.  
-  Done when: pipeline yields reproducible results.
+- [x] Golden poster tests + deterministic seed.  
+  Done when: pipeline yields reproducible results. (Added determinism tests for candidate generation and helper scoring.)
 - [ ] Stress ceiling tests (50k items).  
   Done when: app degrades gracefully (no crash).
 - [ ] Vacuum/maintenance tasks.  

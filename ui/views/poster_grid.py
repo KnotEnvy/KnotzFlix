@@ -38,6 +38,16 @@ class PosterTileDelegate(QStyledItemDelegate):
         poster_rect = QRect(rect.left(), rect.top(), rect.width(), rect.height())
         radius = 8
 
+        # Subtle drop shadow
+        try:
+            shadow = QRect(poster_rect)
+            shadow.translate(0, 2)
+            painter.setBrush(QColor(0, 0, 0, 60))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawRoundedRect(shadow, radius + 0.5, radius + 0.5)
+        except Exception:
+            pass
+
         # Background (for empty/placeholder)
         bg = QColor(28, 28, 28) if option.palette.color(option.palette.ColorRole.Base).lightness() < 128 else QColor(240, 240, 240)
         painter.setBrush(QBrush(bg))
@@ -144,11 +154,43 @@ class PosterTileDelegate(QStyledItemDelegate):
             ty2 = by + bar_h - 1
             painter.drawText(QRect(bx, by - 6, bar_w, bar_h + 12), Qt.AlignmentFlag.AlignCenter, t)
 
+        # Corner badges: watched (top-left) and private lock (top-right)
+        try:
+            watched = bool(index.data(Roles.WatchedRole) or False)
+        except Exception:
+            watched = False
+        try:
+            is_priv = bool(index.data(Roles.IsPrivateRole) or False)
+        except Exception:
+            is_priv = False
+
+        if watched:
+            from PyQt6.QtGui import QFont
+            r = QRect(poster_rect.left() + 6, poster_rect.top() + 6, 22, 22)
+            painter.setBrush(QColor(46, 204, 113))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(r)
+            painter.setPen(QColor(255, 255, 255))
+            f = painter.font(); f.setBold(True); f.setPointSize(10); painter.setFont(f)
+            painter.drawText(r, Qt.AlignmentFlag.AlignCenter, "✓")
+
+        if is_priv:
+            r = QRect(poster_rect.right() - 6 - 22, poster_rect.top() + 6, 22, 22)
+            painter.setBrush(QColor(0, 0, 0, 150))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawEllipse(r)
+            painter.setPen(QColor(255, 255, 255))
+            f = painter.font(); f.setPointSize(10); painter.setFont(f)
+            painter.drawText(r, Qt.AlignmentFlag.AlignCenter, "🔒")
+
         # Selection or focus ring
         has_focus = bool(option.state & QStyle.StateFlag.State_HasFocus) or self.parent_view.currentIndex() == index
         is_sel = bool(option.state & QStyle.StateFlag.State_Selected)
         if is_sel or has_focus:
-            pen_color = QColor(66, 133, 244) if has_focus else QColor(255, 255, 255, 180)
+            # Use palette highlight for selection; subtler ring for focus
+            pal = self.parent_view.palette()
+            sel_col = pal.color(pal.ColorRole.Highlight)
+            pen_color = sel_col if is_sel else QColor(66, 133, 244)
             pen = QPen(pen_color, 2)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(pen)
@@ -213,6 +255,9 @@ class PosterGrid(QWidget):
         self.view.setEditTriggers(QListView.EditTrigger.NoEditTriggers)
         self.view.setMouseTracking(True)
         self.view.setSpacing(16)
+        # Smooth scrolling for better UX
+        self.view.setVerticalScrollMode(QListView.ScrollMode.ScrollPerPixel)
+        self.view.setHorizontalScrollMode(QListView.ScrollMode.ScrollPerPixel)
         # Performance tweaks for large lists
         self.view.setLayoutMode(QListView.LayoutMode.Batched)
         self.view.setBatchSize(256)
@@ -226,6 +271,9 @@ class PosterGrid(QWidget):
         self.delegate = PosterTileDelegate(self.view, tile_width=self._tile_width)
         self.view.setItemDelegate(self.delegate)
         self._apply_grid_size()
+
+        # Route type-ahead to the search box when the grid has focus
+        self.view.installEventFilter(self)
 
         # Search box for instant filtering
         self.search = QLineEdit()
@@ -287,6 +335,26 @@ class PosterGrid(QWidget):
         size = self.delegate.tile_size()
         # Grid size defines item rect; add slight padding to avoid clipping focus ring
         self.view.setGridSize(QSize(size.width(), size.height()))
+        # Clear cached scaled pixmaps since size changed
+        try:
+            self.delegate._scaled_cache.clear()
+        except Exception:
+            pass
+
+    def eventFilter(self, obj, event):  # type: ignore[override]
+        from PyQt6.QtCore import QEvent
+        if obj is self.view and event.type() == QEvent.Type.KeyPress:
+            # Forward typeable keys to the search box
+            text = event.text() or ""
+            ctrl = event.modifiers() & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier)
+            if text and not ctrl and (text.isalnum() or text.isspace()):
+                if not self.search.hasFocus():
+                    self.search.setFocus()
+                    # Seed with existing text + new char
+                    self.search.setText(self.search.text() + text)
+                    self.search.end(False)
+                return True
+        return super().eventFilter(obj, event)
 
     def _apply_search(self) -> None:
         text = self.search.text()

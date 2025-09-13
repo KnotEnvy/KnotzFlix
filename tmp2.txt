@@ -1,0 +1,9 @@
+self.recent.model.set_id_blocklist(exclude)
+                try:
+                    self.recent.model.set_private_ids(self._private_ids)
+                except Exception:
+                    pass
+                self.recent.refresh()
+            except Exception:
+                pass
+            

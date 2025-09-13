@@ -49,6 +49,9 @@ Troubleshooting
 - Data location: set `KNOTZFLIX_DATA_DIR` to override the default user data path.
 - Logs: see `<data-dir>/logs/knotzflix.log` for errors.
 
+Packaging
+- See `DOCS/Packaging.md` for PyInstaller-based packaging notes.
+
 Development
 - Lint: `ruff check .`
 - Format: `black .`

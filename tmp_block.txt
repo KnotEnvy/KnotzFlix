@@ -1,0 +1,32 @@
+        def _refresh_private_filters(self) -> None:
+            # Recompute private ids
+            self._private_ids = self._compute_private_ids()
+            # Update Private tab allowlist if unlocked
+            if self._private_unlocked:
+                self.private_grid.model.set_id_allowlist(self._private_ids)
+            else:
+                self.private_grid.model.set_id_allowlist([])
+            try:
+                self.private_grid.model.set_private_ids(self._private_ids)
+            except Exception:
+                pass
+            self.private_grid.refresh()
+            # Exclude private ids from main grids when locked
+            exclude = [] if self._private_unlocked else self._private_ids
+            try:
+                self.grid.model.set_id_blocklist(exclude)
+                try:
+                    self.grid.model.set_private_ids(self._private_ids)
+                except Exception:
+                    pass
+                self.grid.refresh()
+            except Exception:
+                pass
+            try:
+                self.recent.model.set_id_blocklist(exclude)
+                try:
+                    self.recent.model.set_private_ids(self._private_ids)
+                except Exception:
+                    pass
+                self.recent.refresh()
+            except Exception:

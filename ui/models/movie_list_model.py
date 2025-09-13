@@ -16,6 +16,8 @@ class Roles:
     PosterPathRole = Qt.ItemDataRole.UserRole + 4
     ProgressRole = Qt.ItemDataRole.UserRole + 5
     PosterIsPlaceholderRole = Qt.ItemDataRole.UserRole + 6
+    WatchedRole = Qt.ItemDataRole.UserRole + 7
+    IsPrivateRole = Qt.ItemDataRole.UserRole + 8
 
 
 class MovieListModel(QAbstractListModel):
@@ -29,6 +31,7 @@ class MovieListModel(QAbstractListModel):
         self._path_prefix = path_prefix
         self._id_allowlist: Optional[list[int]] = id_allowlist
         self._id_blocklist: Optional[set[int]] = None
+        self._private_ids: Optional[set[int]] = None
         self.refresh()
 
     def refresh(self) -> None:
@@ -148,6 +151,10 @@ class MovieListModel(QAbstractListModel):
         self._id_blocklist = set(ids) if ids else None
         self.refresh()
 
+    def set_private_ids(self, ids: Optional[list[int] | set[int]]) -> None:
+        self._private_ids = set(ids) if ids else None
+        self.refresh()
+
     # Qt model interface
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # type: ignore[override]
         return 0 if parent.isValid() else len(self._items)
@@ -188,6 +195,14 @@ class MovieListModel(QAbstractListModel):
                 pct = int(max(0, min(100, (pos / runtime) * 100)))
                 return pct
             return 0
+        if role == Roles.WatchedRole:
+            return bool(it.get("watched") or False)
+        if role == Roles.IsPrivateRole:
+            try:
+                mid = int(it["id"])  # type: ignore[arg-type]
+            except Exception:
+                return False
+            return bool(self._private_ids and mid in self._private_ids)
         return None
 
     def roleNames(self) -> dict[int, bytes]:  # type: ignore[override]
@@ -198,4 +213,6 @@ class MovieListModel(QAbstractListModel):
         names[Roles.PosterPathRole] = b"poster"
         names[Roles.ProgressRole] = b"progress"
         names[Roles.PosterIsPlaceholderRole] = b"poster_is_placeholder"
+        names[Roles.WatchedRole] = b"watched"
+        names[Roles.IsPrivateRole] = b"is_private"
         return names
